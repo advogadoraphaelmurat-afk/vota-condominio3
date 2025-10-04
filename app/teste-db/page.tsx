@@ -1,14 +1,22 @@
-async function TestePage() {
-  // Exemplo buscando dados de uma API
-  const response = await fetch('https://api.exemplo.com/dados');
-  const data = await response.json();
+import { createClient } from '@supabase/supabase-js'
+
+export default async function TestePage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const { data } = await supabase
+    .from('condominios')
+    .select('*')
+    .limit(5)
 
   return (
-    <>
-      <div>Teste de Conexão</div>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
-    </>
-  );
+    
+      Teste de Conexão
+      
+        {JSON.stringify(data, null, 2)}
+      
+    
+  )
 }
-
-export default TestePage;
