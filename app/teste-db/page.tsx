@@ -1,7 +1,7 @@
 export default function TestePage() {
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">Teste OK</h1>
-    </div>
-  )
-}
+  <>
+    <div>Teste de Conexão</div>
+    <pre>{JSON.stringify(data, null, 2)}</pre>
+  </>
+)
