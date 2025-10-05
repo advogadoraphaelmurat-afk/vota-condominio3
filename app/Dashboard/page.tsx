@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { Home, Vote, Bell, MessageCircle, Users, BarChart3, Settings, Menu, X, AlertCircle, Pin, TrendingUp } from 'lucide-react';
 
