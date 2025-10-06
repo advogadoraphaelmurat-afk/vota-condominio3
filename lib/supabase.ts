@@ -473,22 +473,6 @@ export async function getUserCondominios(userId: string) {
   return data || []
 }
 
-// Helper para pegar os condomínios do usuário
-export async function getUserCondominios(userId: string) {
-  const { data, error } = await supabase
-    .from('usuarios_condominios')
-    .select(`
-      *,
-      condominio:condominios(*),
-      unidade:unidades(*)
-    `)
-    .eq('usuario_id', userId)
-    .eq('status', 'ativo')
-
-  if (error) return []
-  return data || []
-}
-
 // Helper para verificar se é síndico em algum condomínio
 export async function isSindico(userId: string, condominioId?: string) {
   const query = supabase
