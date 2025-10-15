@@ -1,4 +1,4 @@
-// lib/emailService.ts
+// lib/emailservice.ts
 // Serviço para envio de emails/notificações
 
 import { createSupabaseClient } from './supabase'

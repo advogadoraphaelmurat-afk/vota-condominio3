@@ -149,7 +149,7 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
           <h2 className="text-xl font-bold text-gray-900">🗳️ Votações Ativas</h2>
         </div>
         <div className="text-center py-8">
-          <div className="text-gray-400 text-4xl mb-3">📭</div>
+          <div className="text-gray-400 text-4xl mb-3">🔭</div>
           <p className="text-gray-600">Nenhuma votação ativa no momento</p>
         </div>
       </div>

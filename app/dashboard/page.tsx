@@ -1,12 +1,8 @@
-// ============================================
-// ARQUIVO: app/dashboard/page.tsx
-// ============================================
-
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createSupabaseClient, getCurrentUser, getCondominioAtivo } from '@/lib/supabase'
+import { createSupabaseClient } from '@/lib/supabase'
 import AvisosDashboard from '@/components/AvisosDashboard'
 import VotacoesDashboard from '@/components/VotacoesDashboard'
 import ComunicacoesDashboard from '@/components/ComunicacoesDashboard'
@@ -16,6 +12,7 @@ interface Usuario {
   email: string
   nome_completo: string
   role: string
+  ativo: boolean
 }
 
 interface Condominio {
@@ -30,6 +27,7 @@ export default function DashboardPage() {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [condominio, setCondominio] = useState<Condominio | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -37,34 +35,63 @@ export default function DashboardPage() {
 
   const checkAuth = async () => {
     try {
-      const user = await getCurrentUser()
+      const supabase = createSupabaseClient()
       
-      if (!user) {
+      // Verificar sessão de autenticação
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !user) {
         router.push('/login')
         return
       }
 
-      setUsuario(user)
+      // Buscar dados completos do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('auth_id', user.id)
+        .single()
 
-      // Buscar condomínio ativo
-      const vinculo = await getCondominioAtivo(user.id)
-      
-      if (!vinculo) {
-        alert('Você não está vinculado a nenhum condomínio. Aguarde aprovação do síndico.')
+      if (userError || !userData) {
+        console.error('Erro ao buscar usuário:', userError)
+        router.push('/login')
         return
       }
 
-      // Buscar dados do condomínio
-      const supabase = createSupabaseClient()
-      const { data: condData } = await supabase
-        .from('condominios')
-        .select('*')
-        .eq('id', vinculo.condominio_id)
+      setUsuario(userData)
+
+      // Verificar se é admin
+      if (userData.role === 'admin') {
+        setIsAdmin(true)
+        setLoading(false)
+        return // Admin não precisa de condomínio
+      }
+
+      // Para não-admins, buscar condomínio ativo
+      const { data: vinculo, error: vinculoError } = await supabase
+        .from('usuarios_condominios')
+        .select(`
+          *,
+          condominio:condominios(*)
+        `)
+        .eq('usuario_id', userData.id)
+        .eq('status', 'aprovado')
         .single()
 
-      if (condData) {
-        setCondominio(condData)
+      if (vinculoError || !vinculo) {
+        console.error('Erro ao buscar vínculo:', vinculoError)
+        setLoading(false)
+        return
       }
+
+      // Verificar se condomínio está ativo
+      if (!vinculo.condominio?.ativo) {
+        router.push('/condominio-desativado')
+        return
+      }
+
+      setCondominio(vinculo.condominio)
+
     } catch (error) {
       console.error('Erro ao verificar autenticação:', error)
       router.push('/login')
@@ -91,6 +118,8 @@ export default function DashboardPage() {
         return '🏠 Morador'
       case 'administradora':
         return '🏢 Administradora'
+      case 'admin':
+        return '👑 Super Administrador'
       default:
         return '👤 Usuário'
     }
@@ -107,6 +136,13 @@ export default function DashboardPage() {
     )
   }
 
+  // Se for admin, redireciona para dashboard do admin
+  if (isAdmin && usuario) {
+    router.push('/admin/dashboard')
+    return null
+  }
+
+  // Se não tem usuário ou condomínio
   if (!usuario || !condominio) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -116,7 +152,7 @@ export default function DashboardPage() {
             Acesso Pendente
           </h2>
           <p className="text-gray-600 mb-6">
-            Você não está vinculado a nenhum condomínio. Entre em contato com o síndico para aprovar seu acesso.
+            Você não está vinculado a nenhum condomínio ativo. Entre em contato com o síndico para aprovar seu acesso.
           </p>
           <button
             onClick={handleLogout}

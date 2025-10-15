@@ -1,3 +1,4 @@
+// components/ComunicacoesDashboard.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -249,3 +250,41 @@ export default function ComunicacoesDashboard({ userId }: ComunicacoesDashboardP
                       <p className="text-xs text-gray-500 mb-2">
                         De: {getRemetenteLabel(com.remetente.role)} • {formatarData(com.created_at)}
                       </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <p className={`text-sm text-gray-700 ${!com.lida ? 'font-medium' : ''}`}>
+                {truncarTexto(com.conteudo)}
+              </p>
+
+              {/* Footer */}
+              <div className="mt-3 flex items-center justify-between text-xs">
+                <span className="text-gray-500 capitalize">
+                  {com.tipo.replace('_', ' ')}
+                </span>
+                <span className="text-blue-600 font-medium">
+                  Clique para ler →
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      {comunicacoes.length >= 4 && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <button
+            onClick={() => router.push('/comunicacoes')}
+            className="w-full text-center text-sm text-gray-600 hover:text-gray-900 font-medium"
+          >
+            Ver todas as comunicações →
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

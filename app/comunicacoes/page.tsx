@@ -1,4 +1,5 @@
-'use client'; // Adicione esta linha para usar hooks no App Router
+// app/comunicacoes/page.tsx
+'use client';
 
 import { useState } from 'react';
 import { 

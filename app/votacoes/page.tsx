@@ -108,7 +108,7 @@ export default function VotacoesPage() {
     )
   }
 
-  const isSindico = usuario?.tipo_usuario === 'super_admin' || false // Ajustar lógica depois
+  const isSindico = usuario?.tipo_usuario === 'super_admin' || false
 
   return (
     <div className="min-h-screen bg-gray-50">
