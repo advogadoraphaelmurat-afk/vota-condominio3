@@ -55,7 +55,7 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
           ),
           votos(id, usuario_id)
         `)
-        .eq('condominio_id', vinculo.condominio_id)
+        .eq('condominio_id', condominio.condominio_id)
         .eq('status', 'ativa')
         .order('created_at', { ascending: false })
         .limit(3)

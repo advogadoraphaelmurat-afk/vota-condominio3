@@ -53,7 +53,7 @@ export default function ComunicacoesDashboard({ userId }: ComunicacoesDashboardP
             role
           )
         `)
-        .eq('condominio_id', vinculo.condominio_id)
+        .eq('condominio_id', condominio.condominio_id)
         .contains('destinatarios', [userId])
         .order('created_at', { ascending: false })
         .limit(4)
