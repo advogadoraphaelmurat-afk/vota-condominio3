@@ -62,7 +62,6 @@ export default function AdminDashboard() {
   const [abaAtiva, setAbaAtiva] = useState<'geral' | 'sindicos' | 'mensagens'>('geral')
   const [busca, setBusca] = useState('')
   
-  // Estados para modais
   const [mostrarModalEditar, setMostrarModalEditar] = useState(false)
   const [mostrarModalSindico, setMostrarModalSindico] = useState(false)
   const [condominioEditando, setCondominioEditando] = useState<Condominio | null>(null)
@@ -171,8 +170,6 @@ export default function AdminDashboard() {
         return
       }
 
-      console.log('Condomínios carregados:', data)
-
       setCondominios(data || [])
       setCondominiosFiltrados(data || [])
     } catch (error) {
@@ -183,6 +180,7 @@ export default function AdminDashboard() {
   const carregarSindicosPendentes = async () => {
     try {
       const supabase = createSupabaseClient()
+      
       const { data, error } = await supabase
         .from('usuarios_condominios')
         .select(`
@@ -190,14 +188,14 @@ export default function AdminDashboard() {
           usuario_id,
           condominio_id,
           created_at,
-          usuarios (
+          usuarios:usuario_id (
             id,
             nome_completo,
             email,
             telefone,
             cpf
           ),
-          condominios (
+          condominios:condominio_id (
             nome,
             cidade,
             estado
@@ -218,16 +216,17 @@ export default function AdminDashboard() {
   const carregarSindicosAprovados = async () => {
     try {
       const supabase = createSupabaseClient()
+      
       const { data, error } = await supabase
         .from('usuarios_condominios')
         .select(`
-          usuarios!inner(
+          usuarios:usuario_id!inner(
             id,
             nome_completo,
             email,
             telefone
           ),
-          condominios!inner(
+          condominios:condominio_id!inner(
             id,
             nome
           )
@@ -271,15 +270,11 @@ export default function AdminDashboard() {
         ativo: true
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('condominios')
         .insert([dadosCondominio])
-        .select()
 
-      if (error) {
-        console.error('Erro ao criar condomínio:', error)
-        throw error
-      }
+      if (error) throw error
 
       alert('✅ Condomínio criado com sucesso!')
       setNovoCondominio({
@@ -288,7 +283,6 @@ export default function AdminDashboard() {
       
       await carregarCondominios()
     } catch (error: any) {
-      console.error('Erro completo:', error)
       alert('❌ Erro ao criar condomínio: ' + error.message)
     } finally {
       setLoading(false)
@@ -322,7 +316,6 @@ export default function AdminDashboard() {
           endereco: condominioEditando.endereco,
           cidade: condominioEditando.cidade,
           estado: condominioEditando.estado,
-          cep: condominioEditando.cep || null,
           total_unidades: condominioEditando.total_unidades,
           unidades_ocupadas: condominioEditando.unidades_ocupadas
         })
@@ -348,18 +341,16 @@ export default function AdminDashboard() {
       
       const { error } = await supabase
         .from('condominios')
-        .update({
-          sindico_responsavel_id: sindicoId
-        })
+        .update({ sindico_responsavel_id: sindicoId })
         .eq('id', condominioSelecionado.id)
 
       if (error) throw error
 
-      alert('✅ Síndico responsável atualizado com sucesso!')
+      alert('✅ Síndico responsável atualizado!')
       setMostrarModalSindico(false)
       await carregarCondominios()
     } catch (error: any) {
-      alert('❌ Erro ao atualizar síndico responsável: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
   }
 
@@ -371,27 +362,24 @@ export default function AdminDashboard() {
       
       const { error } = await supabase
         .from('condominios')
-        .update({
-          sindico_responsavel_id: null
-        })
+        .update({ sindico_responsavel_id: null })
         .eq('id', condominioSelecionado.id)
 
       if (error) throw error
 
-      alert('✅ Síndico responsável removido com sucesso!')
+      alert('✅ Síndico removido!')
       setMostrarModalSindico(false)
       await carregarCondominios()
     } catch (error: any) {
-      alert('❌ Erro ao remover síndico responsável: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
   }
 
   const excluirCondominio = async (condominioId: string, nome: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o condomínio "${nome}"? Esta ação não pode ser desfeita.`)) return
+    if (!confirm(`Excluir "${nome}"?`)) return
 
     try {
       const supabase = createSupabaseClient()
-      
       const { error } = await supabase
         .from('condominios')
         .delete()
@@ -399,59 +387,45 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      alert('✅ Condomínio excluído com sucesso!')
+      alert('✅ Condomínio excluído!')
       await carregarCondominios()
     } catch (error: any) {
-      alert('❌ Erro ao excluir condomínio: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
   }
 
   const toggleStatusCondominio = async (condominioId: string, ativoAtual: boolean) => {
-    if (!confirm(`Deseja ${ativoAtual ? 'desativar' : 'ativar'} este condomínio?`)) return
+    if (!confirm(`${ativoAtual ? 'Desativar' : 'Ativar'} condomínio?`)) return
 
     try {
       const supabase = createSupabaseClient()
-      const novoStatus = !ativoAtual
-      
       const { error } = await supabase
         .from('condominios')
-        .update({ ativo: novoStatus })
+        .update({ ativo: !ativoAtual })
         .eq('id', condominioId)
 
       if (error) throw error
 
-      setCondominios(prev => 
-        prev.map(cond => 
-          cond.id === condominioId 
-            ? { ...cond, ativo: novoStatus }
-            : cond
-        )
-      )
-
-      alert(`✅ Condomínio ${novoStatus ? 'ativado' : 'desativado'} com sucesso!`)
+      alert(`✅ Condomínio ${!ativoAtual ? 'ativado' : 'desativado'}!`)
+      await carregarCondominios()
     } catch (error: any) {
-      alert('❌ Erro ao atualizar condomínio: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
   }
 
   const aprovarSindico = async (sindicoPendente: SindicoPendente) => {
-    if (!confirm(`Aprovar ${sindicoPendente.usuarios.nome_completo} como síndico do ${sindicoPendente.condominios.nome}?`)) return
+    if (!confirm(`Aprovar ${sindicoPendente.usuarios.nome_completo}?`)) return
 
     try {
       const supabase = createSupabaseClient()
 
-      // 1. Atualizar usuário para ativo e definir role como síndico
       const { error: userError } = await supabase
         .from('usuarios')
-        .update({ 
-          ativo: true,
-          role: 'sindico'
-        })
+        .update({ ativo: true, role: 'sindico' })
         .eq('id', sindicoPendente.usuario_id)
 
       if (userError) throw userError
 
-      // 2. Aprovar o vínculo do síndico com o condomínio
       const { error: vinculoError } = await supabase
         .from('usuarios_condominios')
         .update({ 
@@ -463,27 +437,22 @@ export default function AdminDashboard() {
 
       if (vinculoError) throw vinculoError
 
-      // 3. Atualizar o condomínio com o síndico responsável
       const { error: condominioError } = await supabase
         .from('condominios')
-        .update({ 
-          sindico_responsavel_id: sindicoPendente.usuario_id
-        })
+        .update({ sindico_responsavel_id: sindicoPendente.usuario_id })
         .eq('id', sindicoPendente.condominio_id)
 
       if (condominioError) throw condominioError
 
-      alert('✅ Síndico aprovado com sucesso!')
-      await carregarSindicosPendentes()
-      await carregarCondominios()
-      await carregarSindicosAprovados()
+      alert('✅ Síndico aprovado!')
+      await carregarDados()
     } catch (error: any) {
-      alert('❌ Erro ao aprovar síndico: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
   }
 
   const rejeitarSindico = async (sindicoPendenteId: string) => {
-    if (!confirm('Rejeitar este cadastro de síndico?')) return
+    if (!confirm('Rejeitar síndico?')) return
 
     try {
       const supabase = createSupabaseClient()
@@ -494,23 +463,11 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      alert('❌ Cadastro de síndico rejeitado')
+      alert('❌ Síndico rejeitado')
       await carregarSindicosPendentes()
     } catch (error: any) {
-      alert('❌ Erro ao rejeitar síndico: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     }
-  }
-
-  const enviarMensagem = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Implementar lógica de envio de mensagens
-    alert('📨 Mensagem enviada com sucesso!')
-    setNovaMensagem({
-      titulo: '',
-      conteudo: '',
-      destinatarios: 'todos',
-      condominios_selecionados: []
-    })
   }
 
   if (loading) {
@@ -531,14 +488,11 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">👑 Super Administrador</h1>
-              <p className="text-sm text-gray-600">Gerencie todos os condomínios do sistema</p>
+              <p className="text-sm text-gray-600">Gerencie todos os condomínios</p>
             </div>
             <div className="text-right">
-              <div className="text-sm text-gray-600">Logado como: <strong>{usuario?.email}</strong></div>
-              <button
-                onClick={handleLogout}
-                className="mt-1 px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
+              <div className="text-sm text-gray-600">Logado: <strong>{usuario?.email}</strong></div>
+              <button onClick={handleLogout} className="mt-1 px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg">
                 Sair
               </button>
             </div>
@@ -552,16 +506,16 @@ export default function AdminDashboard() {
             <nav className="-mb-px flex">
               <button
                 onClick={() => setAbaAtiva('geral')}
-                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
-                  abaAtiva === 'geral' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  abaAtiva === 'geral' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'
                 }`}
               >
-                🏢 Gerenciar Condomínios
+                🏢 Condomínios
               </button>
               <button
                 onClick={() => setAbaAtiva('sindicos')}
-                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
-                  abaAtiva === 'sindicos' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                className={`py-4 px-6 border-b-2 font-medium text-sm ${
+                  abaAtiva === 'sindicos' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'
                 }`}
               >
                 👔 Aprovar Síndicos
@@ -571,236 +525,167 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </button>
-              <button
-                onClick={() => setAbaAtiva('mensagens')}
-                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
-                  abaAtiva === 'mensagens' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                📨 Enviar Mensagens
-              </button>
             </nav>
           </div>
         </div>
 
-        {/* Aba Geral - Condomínios */}
         {abaAtiva === 'geral' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Estatísticas */}
             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 bg-blue-100 rounded-lg"><span className="text-2xl">🏢</span></div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Total de Condomínios</p>
-                    <p className="text-2xl font-bold text-gray-900">{condominios.length}</p>
+                    <p className="text-sm text-gray-600">Total</p>
+                    <p className="text-2xl font-bold">{condominios.length}</p>
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 bg-green-100 rounded-lg"><span className="text-2xl">✅</span></div>
                   <div className="ml-4">
                     <p className="text-sm text-gray-600">Ativos</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {condominios.filter(c => c.ativo).length}
-                    </p>
+                    <p className="text-2xl font-bold text-green-600">{condominios.filter(c => c.ativo).length}</p>
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 bg-red-100 rounded-lg"><span className="text-2xl">❌</span></div>
                   <div className="ml-4">
                     <p className="text-sm text-gray-600">Inativos</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {condominios.filter(c => !c.ativo).length}
-                    </p>
+                    <p className="text-2xl font-bold text-red-600">{condominios.filter(c => !c.ativo).length}</p>
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-3 bg-purple-100 rounded-lg"><span className="text-2xl">📊</span></div>
                   <div className="ml-4">
-                    <p className="text-sm text-gray-600">Taxa de Ativos</p>
+                    <p className="text-sm text-gray-600">Taxa Ativos</p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {condominios.length > 0 
-                        ? ((condominios.filter(c => c.ativo).length / condominios.length) * 100).toFixed(1) 
-                        : '0'
-                      }%
+                      {condominios.length > 0 ? ((condominios.filter(c => c.ativo).length / condominios.length) * 100).toFixed(1) : '0'}%
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Cadastrar Condomínio */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Cadastrar Novo Condomínio</h2>
+                <h2 className="text-xl font-semibold mb-4">Cadastrar Condomínio</h2>
                 <form onSubmit={criarCondominio} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Condomínio *</label>
-                    <input
-                      type="text"
-                      value={novoCondominio.nome}
-                      onChange={(e) => setNovoCondominio({ ...novoCondominio, nome: e.target.value })}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">CNPJ</label>
-                    <input
-                      type="text"
-                      value={novoCondominio.cnpj}
-                      onChange={(e) => setNovoCondominio({ ...novoCondominio, cnpj: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Total de Unidades *</label>
-                    <input
-                      type="number"
-                      value={novoCondominio.total_unidades}
-                      onChange={(e) => setNovoCondominio({ ...novoCondominio, total_unidades: e.target.value })}
-                      required
-                      min="1"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Endereço *</label>
-                    <input
-                      type="text"
-                      value={novoCondominio.endereco}
-                      onChange={(e) => setNovoCondominio({ ...novoCondominio, endereco: e.target.value })}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
+                  <input
+                    type="text"
+                    value={novoCondominio.nome}
+                    onChange={(e) => setNovoCondominio({ ...novoCondominio, nome: e.target.value })}
+                    placeholder="Nome *"
+                    required
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    value={novoCondominio.cnpj}
+                    onChange={(e) => setNovoCondominio({ ...novoCondominio, cnpj: e.target.value })}
+                    placeholder="CNPJ"
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="number"
+                    value={novoCondominio.total_unidades}
+                    onChange={(e) => setNovoCondominio({ ...novoCondominio, total_unidades: e.target.value })}
+                    placeholder="Total Unidades *"
+                    required
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    value={novoCondominio.endereco}
+                    onChange={(e) => setNovoCondominio({ ...novoCondominio, endereco: e.target.value })}
+                    placeholder="Endereço *"
+                    required
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Cidade *</label>
-                      <input
-                        type="text"
-                        value={novoCondominio.cidade}
-                        onChange={(e) => setNovoCondominio({ ...novoCondominio, cidade: e.target.value })}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Estado *</label>
-                      <input
-                        type="text"
-                        value={novoCondominio.estado}
-                        onChange={(e) => setNovoCondominio({ ...novoCondominio, estado: e.target.value })}
-                        required
-                        maxLength={2}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
-                        placeholder="SP"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      value={novoCondominio.cidade}
+                      onChange={(e) => setNovoCondominio({ ...novoCondominio, cidade: e.target.value })}
+                      placeholder="Cidade *"
+                      required
+                      className="w-full px-4 py-2 border rounded-lg"
+                    />
+                    <input
+                      type="text"
+                      value={novoCondominio.estado}
+                      onChange={(e) => setNovoCondominio({ ...novoCondominio, estado: e.target.value })}
+                      placeholder="UF *"
+                      required
+                      maxLength={2}
+                      className="w-full px-4 py-2 border rounded-lg uppercase"
+                    />
                   </div>
-
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
                   >
-                    {loading ? 'Criando...' : 'Cadastrar Condomínio'}
+                    Cadastrar
                   </button>
                 </form>
               </div>
             </div>
 
-            {/* Lista de Condomínios */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold">Todos os Condomínios ({condominios.length})</h2>
-                  <div className="relative w-64">
-                    <input
-                      type="text"
-                      placeholder="Buscar condomínio..."
-                      value={busca}
-                      onChange={(e) => setBusca(e.target.value)}
-                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-400">🔍</span>
-                    </div>
-                  </div>
+                  <h2 className="text-xl font-semibold">Condomínios ({condominios.length})</h2>
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    className="w-64 px-4 py-2 border rounded-lg"
+                  />
                 </div>
                 
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {condominiosFiltrados.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      {condominios.length === 0 ? 'Nenhum condomínio cadastrado' : 'Nenhum condomínio encontrado'}
-                    </div>
+                    <p className="text-center py-8 text-gray-500">Nenhum condomínio</p>
                   ) : (
-                    condominiosFiltrados.map((condominio) => (
-                      <div key={condominio.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
+                    condominiosFiltrados.map((cond) => (
+                      <div key={cond.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{condominio.nome}</h3>
+                            <h3 className="font-semibold text-lg">{cond.nome}</h3>
                             <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-gray-600">
-                              <div><strong>CNPJ:</strong> {condominio.cnpj || 'Não informado'}</div>
-                              <div><strong>Unidades:</strong> {condominio.unidades_ocupadas}/{condominio.total_unidades}</div>
-                              <div><strong>Localização:</strong> {condominio.cidade}/{condominio.estado}</div>
+                              <div><strong>CNPJ:</strong> {cond.cnpj || 'N/A'}</div>
+                              <div><strong>Unidades:</strong> {cond.unidades_ocupadas}/{cond.total_unidades}</div>
+                              <div><strong>Local:</strong> {cond.cidade}/{cond.estado}</div>
                               <div>
-                                <strong>Síndico:</strong> 
-                                <span className={`ml-1 ${condominio.sindico_responsavel ? 'text-green-600' : 'text-gray-500'}`}>
-                                  {condominio.sindico_responsavel 
-                                    ? `${condominio.sindico_responsavel.nome_completo}`
-                                    : 'Não definido'
-                                  }
-                                </span>
+                                <strong>Síndico:</strong> {cond.sindico_responsavel?.nome_completo || 'Não definido'}
                               </div>
                               <div>
                                 <strong>Status:</strong> 
-                                <span className={`ml-1 ${condominio.ativo ? 'text-green-600' : 'text-red-600'}`}>
-                                  {condominio.ativo ? 'Ativo' : 'Inativo'}
-                                </span>
+                                <span className={cond.ativo ? 'text-green-600' : 'text-red-600'}> {cond.ativo ? 'Ativo' : 'Inativo'}</span>
                               </div>
                             </div>
                           </div>
                           <div className="flex flex-col gap-2 ml-4">
                             <button
-                              onClick={() => toggleStatusCondominio(condominio.id, condominio.ativo)}
-                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                condominio.ativo 
-                                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                                  : 'bg-green-600 text-white hover:bg-green-700'
-                              }`}
+                              onClick={() => toggleStatusCondominio(cond.id, cond.ativo)}
+                              className={`px-4 py-2 rounded-lg text-sm ${cond.ativo ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white`}
                             >
-                              {condominio.ativo ? 'Desativar' : 'Ativar'}
+                              {cond.ativo ? 'Desativar' : 'Ativar'}
                             </button>
-                            <button
-                              onClick={() => abrirModalEditar(condominio)}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                            >
+                            <button onClick={() => abrirModalEditar(cond)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
                               Editar
                             </button>
-                            <button
-                              onClick={() => abrirModalSindico(condominio)}
-                              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors"
-                            >
-                              {condominio.sindico_responsavel ? 'Alterar Síndico' : 'Definir Síndico'}
+                            <button onClick={() => abrirModalSindico(cond)} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+                              Síndico
                             </button>
-                            <button
-                              onClick={() => excluirCondominio(condominio.id, condominio.nome)}
-                              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-                            >
+                            <button onClick={() => excluirCondominio(cond.id, cond.nome)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
                               Excluir
                             </button>
                           </div>
@@ -814,42 +699,34 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Aba Síndicos Pendentes */}
         {abaAtiva === 'sindicos' && (
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Síndicos Pendentes de Aprovação</h2>
+            <h2 className="text-xl font-semibold mb-4">Síndicos Pendentes ({sindicosPendentes.length})</h2>
             
             {sindicosPendentes.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-4xl mb-4">👥</div>
-                <p className="text-gray-500">Nenhum síndico aguardando aprovação</p>
+                <p className="text-gray-500">Nenhum síndico pendente</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {sindicosPendentes.map((sindico) => (
-                  <div key={sindico.id} className="border border-gray-200 rounded-lg p-4">
+                {sindicosPendentes.map((sind) => (
+                  <div key={sind.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{sindico.usuarios.nome_completo}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 text-sm text-gray-600">
-                          <div><strong>Email:</strong> {sindico.usuarios.email}</div>
-                          <div><strong>CPF:</strong> {sindico.usuarios.cpf}</div>
-                          <div><strong>Telefone:</strong> {sindico.usuarios.telefone || 'Não informado'}</div>
-                          <div><strong>Condomínio:</strong> {sindico.condominios.nome} - {sindico.condominios.cidade}/{sindico.condominios.estado}</div>
-                          <div><strong>Solicitado em:</strong> {new Date(sindico.created_at).toLocaleDateString('pt-BR')}</div>
+                        <h3 className="font-semibold text-lg">{sind.usuarios.nome_completo}</h3>
+                        <div className="grid grid-cols-2 gap-2 mt-2 text-sm text-gray-600">
+                          <div><strong>Email:</strong> {sind.usuarios.email}</div>
+                          <div><strong>CPF:</strong> {sind.usuarios.cpf}</div>
+                          <div><strong>Telefone:</strong> {sind.usuarios.telefone || 'N/A'}</div>
+                          <div><strong>Condomínio:</strong> {sind.condominios.nome}</div>
                         </div>
                       </div>
                       <div className="flex gap-2 ml-4">
-                        <button
-                          onClick={() => aprovarSindico(sindico)}
-                          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                        >
+                        <button onClick={() => aprovarSindico(sind)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
                           ✓ Aprovar
                         </button>
-                        <button
-                          onClick={() => rejeitarSindico(sindico.id)}
-                          className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-                        >
+                        <button onClick={() => rejeitarSindico(sind.id)} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
                           ✗ Rejeitar
                         </button>
                       </div>
@@ -861,180 +738,76 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Aba Mensagens */}
-        {abaAtiva === 'mensagens' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Enviar Mensagem</h2>
-            <form onSubmit={enviarMensagem} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Destinatários</label>
-                <select
-                  value={novaMensagem.destinatarios}
-                  onChange={(e) => setNovaMensagem({ ...novaMensagem, destinatarios: e.target.value as any })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="todos">Todos os condomínios</option>
-                  <option value="sindicos">Apenas síndicos</option>
-                  <option value="moradores">Apenas moradores</option>
-                  <option value="condominios-especificos">Condomínios específicos</option>
-                </select>
-              </div>
-
-              {novaMensagem.destinatarios === 'condominios-especificos' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Selecione os condomínios</label>
-                  <select
-                    multiple
-                    value={novaMensagem.condominios_selecionados}
-                    onChange={(e) => setNovaMensagem({
-                      ...novaMensagem,
-                      condominios_selecionados: Array.from(e.target.selectedOptions, option => option.value)
-                    })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-32"
-                  >
-                    {condominios.map(condominio => (
-                      <option key={condominio.id} value={condominio.id}>
-                        {condominio.nome} - {condominio.cidade}/{condominio.estado}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">Mantenha Ctrl pressionado para selecionar múltiplos</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Assunto *</label>
-                <input
-                  type="text"
-                  value={novaMensagem.titulo}
-                  onChange={(e) => setNovaMensagem({ ...novaMensagem, titulo: e.target.value })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Mensagem *</label>
-                <textarea
-                  value={novaMensagem.conteudo}
-                  onChange={(e) => setNovaMensagem({ ...novaMensagem, conteudo: e.target.value })}
-                  required
-                  rows={6}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-              >
-                📨 Enviar Mensagem
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Modal de Edição */}
+        {/* Modal Editar */}
         {mostrarModalEditar && condominioEditando && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
               <h2 className="text-xl font-semibold mb-4">Editar Condomínio</h2>
               <form onSubmit={atualizarCondominio} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Condomínio *</label>
-                  <input
-                    type="text"
-                    value={condominioEditando.nome}
-                    onChange={(e) => setCondominioEditando({ ...condominioEditando, nome: e.target.value })}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CNPJ</label>
-                  <input
-                    type="text"
-                    value={condominioEditando.cnpj || ''}
-                    onChange={(e) => setCondominioEditando({ ...condominioEditando, cnpj: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
+                <input
+                  type="text"
+                  value={condominioEditando.nome}
+                  onChange={(e) => setCondominioEditando({ ...condominioEditando, nome: e.target.value })}
+                  placeholder="Nome"
+                  required
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <input
+                  type="text"
+                  value={condominioEditando.cnpj || ''}
+                  onChange={(e) => setCondominioEditando({ ...condominioEditando, cnpj: e.target.value })}
+                  placeholder="CNPJ"
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Total de Unidades *</label>
-                    <input
-                      type="number"
-                      value={condominioEditando.total_unidades}
-                      onChange={(e) => setCondominioEditando({ ...condominioEditando, total_unidades: parseInt(e.target.value) })}
-                      required
-                      min="1"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Unidades Ocupadas</label>
-                    <input
-                      type="number"
-                      value={condominioEditando.unidades_ocupadas}
-                      onChange={(e) => setCondominioEditando({ ...condominioEditando, unidades_ocupadas: parseInt(e.target.value) })}
-                      min="0"
-                      max={condominioEditando.total_unidades}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Endereço *</label>
                   <input
-                    type="text"
-                    value={condominioEditando.endereco}
-                    onChange={(e) => setCondominioEditando({ ...condominioEditando, endereco: e.target.value })}
+                    type="number"
+                    value={condominioEditando.total_unidades}
+                    onChange={(e) => setCondominioEditando({ ...condominioEditando, total_unidades: parseInt(e.target.value) })}
+                    placeholder="Total Unidades"
                     required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="number"
+                    value={condominioEditando.unidades_ocupadas}
+                    onChange={(e) => setCondominioEditando({ ...condominioEditando, unidades_ocupadas: parseInt(e.target.value) })}
+                    placeholder="Ocupadas"
+                    className="w-full px-4 py-2 border rounded-lg"
                   />
                 </div>
-
+                <input
+                  type="text"
+                  value={condominioEditando.endereco}
+                  onChange={(e) => setCondominioEditando({ ...condominioEditando, endereco: e.target.value })}
+                  placeholder="Endereço"
+                  required
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Cidade *</label>
-                    <input
-                      type="text"
-                      value={condominioEditando.cidade}
-                      onChange={(e) => setCondominioEditando({ ...condominioEditando, cidade: e.target.value })}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estado *</label>
-                    <input
-                      type="text"
-                      value={condominioEditando.estado}
-                      onChange={(e) => setCondominioEditando({ ...condominioEditando, estado: e.target.value })}
-                      required
-                      maxLength={2}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
-                      placeholder="SP"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={condominioEditando.cidade}
+                    onChange={(e) => setCondominioEditando({ ...condominioEditando, cidade: e.target.value })}
+                    placeholder="Cidade"
+                    required
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    value={condominioEditando.estado}
+                    onChange={(e) => setCondominioEditando({ ...condominioEditando, estado: e.target.value })}
+                    placeholder="UF"
+                    required
+                    maxLength={2}
+                    className="w-full px-4 py-2 border rounded-lg uppercase"
+                  />
                 </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-                  >
-                    {loading ? 'Salvando...' : 'Salvar Alterações'}
+                <div className="flex gap-4">
+                  <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
+                    Salvar
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMostrarModalEditar(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors"
-                  >
+                  <button type="button" onClick={() => setMostrarModalEditar(false)} className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400">
                     Cancelar
                   </button>
                 </div>
@@ -1043,13 +816,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Modal de Gerenciar Síndico Responsável */}
+        {/* Modal Síndico */}
         {mostrarModalSindico && condominioSelecionado && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-semibold mb-4">
-                Gerenciar Síndico - {condominioSelecionado.nome}
-              </h2>
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-semibold mb-4">Gerenciar Síndico - {condominioSelecionado.nome}</h2>
               
               <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                 <h3 className="font-semibold mb-2">Síndico Atual:</h3>
@@ -1059,10 +830,7 @@ export default function AdminDashboard() {
                       <p className="font-medium">{condominioSelecionado.sindico_responsavel.nome_completo}</p>
                       <p className="text-sm text-gray-600">{condominioSelecionado.sindico_responsavel.email}</p>
                     </div>
-                    <button
-                      onClick={removerSindicoResponsavel}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-                    >
+                    <button onClick={removerSindicoResponsavel} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
                       Remover
                     </button>
                   </div>
@@ -1074,38 +842,33 @@ export default function AdminDashboard() {
               <div>
                 <h3 className="font-semibold mb-4">Selecionar Novo Síndico:</h3>
                 <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {sindicosAprovados.map((sindico) => (
-                    <div key={sindico.id} className="border border-gray-200 rounded-lg p-4">
+                  {sindicosAprovados.map((sind) => (
+                    <div key={sind.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-center">
                         <div>
-                          <p className="font-medium">{sindico.nome_completo}</p>
-                          <p className="text-sm text-gray-600">{sindico.email}</p>
-                          <p className="text-sm text-gray-500">Condomínio atual: {sindico.condominio_nome}</p>
+                          <p className="font-medium">{sind.nome_completo}</p>
+                          <p className="text-sm text-gray-600">{sind.email}</p>
+                          <p className="text-sm text-gray-500">Condomínio: {sind.condominio_nome}</p>
                         </div>
                         <button
-                          onClick={() => atualizarSindicoResponsavel(sindico.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                          disabled={sindico.condominio_id === condominioSelecionado.id}
+                          onClick={() => atualizarSindicoResponsavel(sind.id)}
+                          disabled={sind.condominio_id === condominioSelecionado.id}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
                         >
-                          {sindico.condominio_id === condominioSelecionado.id ? 'Atual' : 'Selecionar'}
+                          {sind.condominio_id === condominioSelecionado.id ? 'Atual' : 'Selecionar'}
                         </button>
                       </div>
                     </div>
                   ))}
                   {sindicosAprovados.length === 0 && (
-                    <p className="text-gray-500 text-center py-4">Nenhum síndico aprovado disponível</p>
+                    <p className="text-gray-500 text-center py-4">Nenhum síndico aprovado</p>
                   )}
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-6">
-                <button
-                  onClick={() => setMostrarModalSindico(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors"
-                >
-                  Fechar
-                </button>
-              </div>
+              <button onClick={() => setMostrarModalSindico(false)} className="w-full mt-6 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400">
+                Fechar
+              </button>
             </div>
           </div>
         )}
