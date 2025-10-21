@@ -43,6 +43,7 @@ export default function ComunicacoesDashboard({ userId }: ComunicacoesDashboardP
         return
       }
 
+      // ✅ CORREÇÃO: Usar vinculo.condominio_id ao invés de vinculo.id
       const { data, error } = await supabase
         .from('comunicacoes')
         .select(`
@@ -52,7 +53,7 @@ export default function ComunicacoesDashboard({ userId }: ComunicacoesDashboardP
             role
           )
         `)
-        .eq('condominio_id', vinculo.id) // ✅ CORREÇÃO: mudar condominio.id para vinculo.id
+        .eq('condominio_id', vinculo.condominio_id)
         .contains('destinatarios', [userId])
         .order('created_at', { ascending: false })
         .limit(4)

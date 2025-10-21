@@ -49,9 +49,41 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
         return
       }
 
-      // ✅ CORREÇÃO: Usar vinculo.condominio_id ao invés de vinculo.id
       console.log('🔍 Buscando votações do condomínio:', vinculo.condominio_id)
 
+      // 🔍 TESTE 1: Verificar se existem votações SEM FILTRO
+      const { data: todasVotacoes, error: erroTodas } = await supabase
+        .from('votacoes')
+        .select('id, titulo, status, condominio_id')
+        .eq('condominio_id', vinculo.condominio_id)
+
+      console.log('🔍 TESTE 1 - Todas as votações do condomínio:', todasVotacoes)
+      console.log('🔍 Total sem filtro:', todasVotacoes?.length || 0)
+
+      if (todasVotacoes && todasVotacoes.length > 0) {
+        console.log('📋 Status das votações:', todasVotacoes.map(v => ({
+          titulo: v.titulo,
+          status: v.status
+        })))
+      }
+
+      // 🔍 TESTE 2: Buscar com filtro de status 'ativa'
+      const { data: votacoesAtivas, error: erroAtivas } = await supabase
+        .from('votacoes')
+        .select('id, titulo, status')
+        .eq('condominio_id', vinculo.condominio_id)
+        .eq('status', 'ativa')
+
+      console.log('🔍 TESTE 2 - Votações com status "ativa":', votacoesAtivas)
+      console.log('🔍 Total ativas:', votacoesAtivas?.length || 0)
+
+      // 🔍 TESTE 3: Verificar valores únicos de status
+      if (todasVotacoes && todasVotacoes.length > 0) {
+        const statusUnicos = [...new Set(todasVotacoes.map(v => v.status))]
+        console.log('🔍 Status únicos encontrados:', statusUnicos)
+      }
+
+      // Query completa com todas as relações
       const { data, error } = await supabase
         .from('votacoes')
         .select(`
@@ -63,7 +95,7 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
           ),
           votos(id, usuario_id)
         `)
-        .eq('condominio_id', vinculo.condominio_id) // ✅ CORREÇÃO AQUI
+        .eq('condominio_id', vinculo.condominio_id)
         .eq('status', 'ativa')
         .order('created_at', { ascending: false })
         .limit(3)
@@ -166,6 +198,9 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
         <div className="text-center py-8">
           <div className="text-gray-400 text-4xl mb-3">🔭</div>
           <p className="text-gray-600">Nenhuma votação ativa no momento</p>
+          <p className="text-xs text-gray-400 mt-2">
+            (Verifique o console para logs de debug)
+          </p>
         </div>
       </div>
     )
