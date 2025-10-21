@@ -51,6 +51,13 @@ interface SindicoAprovado {
   condominio_nome: string
 }
 
+interface Bloco {
+  id: string
+  nome: string
+  andares: number
+  unidades_por_andar: number
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [usuario, setUsuario] = useState<any>(null)
@@ -77,6 +84,10 @@ export default function AdminDashboard() {
     total_unidades: ''
   })
   
+  const [blocos, setBlocos] = useState<Bloco[]>([
+    { id: '1', nome: '', andares: 1, unidades_por_andar: 1 }
+  ])
+
   const [novaMensagem, setNovaMensagem] = useState({
     titulo: '',
     conteudo: '',
@@ -251,39 +262,123 @@ export default function AdminDashboard() {
     }
   }
 
-  const criarCondominio = async (e: React.FormEvent) => {
+  const adicionarBloco = () => {
+    setBlocos([...blocos, { 
+      id: Date.now().toString(), 
+      nome: '', 
+      andares: 1, 
+      unidades_por_andar: 1 
+    }])
+  }
+
+  const removerBloco = (id: string) => {
+    setBlocos(blocos.filter(b => b.id !== id))
+  }
+
+  const atualizarBloco = (id: string, field: string, value: any) => {
+    setBlocos(blocos.map(b => b.id === id ? { ...b, [field]: value } : b))
+  }
+
+  const gerarUnidades = (nomeBloco: string, andares: number, unidadesPorAndar: number) => {
+    const unidades = []
+    for (let andar = 1; andar <= andares; andar++) {
+      for (let unidade = 1; unidade <= unidadesPorAndar; unidade++) {
+        const numero = `${andar}${unidade.toString().padStart(2, '0')}`
+        unidades.push({
+          bloco: nomeBloco,
+          numero,
+          andar,
+          unidade_andar: unidade
+        })
+      }
+    }
+    return unidades
+  }
+
+  const criarCondominioComBlocos = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
       const supabase = createSupabaseClient()
       
-      const dadosCondominio = {
-        nome: novoCondominio.nome,
-        cnpj: novoCondominio.cnpj || null,
-        endereco: novoCondominio.endereco,
-        cidade: novoCondominio.cidade,
-        estado: novoCondominio.estado,
-        cep: novoCondominio.cep || null,
-        total_unidades: parseInt(novoCondominio.total_unidades),
-        unidades_ocupadas: 0,
-        ativo: true
+      // Validar blocos
+      if (blocos.some(b => !b.nome)) {
+        alert('Preencha o nome de todos os blocos')
+        setLoading(false)
+        return
       }
 
-      const { error } = await supabase
+      // Calcular total de unidades
+      const totalUnidades = blocos.reduce((acc, b) => acc + (b.andares * b.unidades_por_andar), 0)
+
+      // 1. Criar condomínio
+      const { data: cond, error: condError } = await supabase
         .from('condominios')
-        .insert([dadosCondominio])
+        .insert({
+          nome: novoCondominio.nome,
+          cnpj: novoCondominio.cnpj || null,
+          endereco: novoCondominio.endereco,
+          cidade: novoCondominio.cidade,
+          estado: novoCondominio.estado,
+          cep: novoCondominio.cep || null,
+          total_unidades: totalUnidades,
+          unidades_ocupadas: 0,
+          ativo: true
+        })
+        .select()
+        .single()
 
-      if (error) throw error
+      if (condError) throw condError
 
-      alert('✅ Condomínio criado com sucesso!')
-      setNovoCondominio({
-        nome: '', cnpj: '', endereco: '', cidade: '', estado: '', cep: '', total_unidades: ''
-      })
+      // 2. Criar blocos
+      const blocosData = blocos.map(b => ({
+        condominio_id: cond.id,
+        nome: b.nome,
+        andares: b.andares,
+        unidades_por_andar: b.unidades_por_andar,
+        total_unidades: b.andares * b.unidades_por_andar
+      }))
+
+      const { data: blocosInseridos, error: blocosError } = await supabase
+        .from('blocos')
+        .insert(blocosData)
+        .select()
+
+      if (blocosError) throw blocosError
+
+      // 3. Criar unidades (SEM a coluna 'ocupada')
+      const todasUnidades = []
+      for (const bloco of blocosInseridos) {
+        const unidadesBloco = gerarUnidades(bloco.nome, bloco.andares, bloco.unidades_por_andar)
+        const unidadesData = unidadesBloco.map(u => ({
+          condominio_id: cond.id,
+          bloco_id: bloco.id,
+          numero: u.numero,
+          andar: u.andar,
+          unidade_andar: u.unidade_andar,
+          moradores_atuais: 0,
+          limite_moradores: 1,
+          created_at: new Date().toISOString()
+        }))
+        todasUnidades.push(...unidadesData)
+      }
+
+      const { error: unidadesError } = await supabase
+        .from('unidades')
+        .insert(todasUnidades)
+
+      if (unidadesError) throw unidadesError
+
+      alert(`✅ Condomínio criado com ${totalUnidades} unidades!`)
+      
+      // Reset
+      setNovoCondominio({ nome: '', cnpj: '', endereco: '', cidade: '', estado: '', cep: '', total_unidades: '' })
+      setBlocos([{ id: '1', nome: '', andares: 1, unidades_por_andar: 1 }])
       
       await carregarCondominios()
     } catch (error: any) {
-      alert('❌ Erro ao criar condomínio: ' + error.message)
+      alert('❌ Erro: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -575,7 +670,7 @@ export default function AdminDashboard() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold mb-4">Cadastrar Condomínio</h2>
-                <form onSubmit={criarCondominio} className="space-y-4">
+                <form onSubmit={criarCondominioComBlocos} className="space-y-4">
                   <input
                     type="text"
                     value={novoCondominio.nome}
@@ -589,14 +684,6 @@ export default function AdminDashboard() {
                     value={novoCondominio.cnpj}
                     onChange={(e) => setNovoCondominio({ ...novoCondominio, cnpj: e.target.value })}
                     placeholder="CNPJ"
-                    className="w-full px-4 py-2 border rounded-lg"
-                  />
-                  <input
-                    type="number"
-                    value={novoCondominio.total_unidades}
-                    onChange={(e) => setNovoCondominio({ ...novoCondominio, total_unidades: e.target.value })}
-                    placeholder="Total Unidades *"
-                    required
                     className="w-full px-4 py-2 border rounded-lg"
                   />
                   <input
@@ -626,12 +713,72 @@ export default function AdminDashboard() {
                       className="w-full px-4 py-2 border rounded-lg uppercase"
                     />
                   </div>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
-                  >
-                    Cadastrar
+
+                  {/* Blocos */}
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-semibold">Blocos</h3>
+                      <button type="button" onClick={adicionarBloco} className="text-blue-600 text-sm">+ Adicionar Bloco</button>
+                    </div>
+                    
+                    {blocos.map((bloco, idx) => (
+                      <div key={bloco.id} className="bg-gray-50 p-3 rounded-lg mb-2">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-medium">Bloco {idx + 1}</span>
+                          {blocos.length > 1 && (
+                            <button type="button" onClick={() => removerBloco(bloco.id)} className="text-red-600 text-sm">✗ Remover</button>
+                          )}
+                        </div>
+                        
+                        {/* Campo de Nome do Bloco */}
+                        <input
+                          type="text"
+                          value={bloco.nome}
+                          onChange={(e) => atualizarBloco(bloco.id, 'nome', e.target.value)}
+                          placeholder="Nome do Bloco *"
+                          required
+                          className="w-full px-3 py-2 border rounded mb-2"
+                        />
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500 mb-1 block">Número de Andares</label>
+                            <input
+                              type="number"
+                              value={bloco.andares}
+                              onChange={(e) => atualizarBloco(bloco.id, 'andares', parseInt(e.target.value) || 1)}
+                              placeholder="Andares *"
+                              required
+                              min="1"
+                              className="w-full px-3 py-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 mb-1 block">Unidades por Andar</label>
+                            <input
+                              type="number"
+                              value={bloco.unidades_por_andar}
+                              onChange={(e) => atualizarBloco(bloco.id, 'unidades_por_andar', parseInt(e.target.value) || 1)}
+                              placeholder="Unid/Andar *"
+                              required
+                              min="1"
+                              className="w-full px-3 py-2 border rounded"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {bloco.andares * bloco.unidades_por_andar} unidades neste bloco
+                        </p>
+                      </div>
+                    ))}
+                    
+                    <p className="text-sm font-medium text-blue-600 mt-3">
+                      Total: {blocos.reduce((acc, b) => acc + (b.andares * b.unidades_por_andar), 0)} unidades
+                    </p>
+                  </div>
+
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
+                    {loading ? 'Criando...' : 'Cadastrar Condomínio'}
                   </button>
                 </form>
               </div>

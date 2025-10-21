@@ -16,50 +16,48 @@ interface Condominio {
 interface Unidade {
   id: string
   numero: string
-  bloco: string
+  bloco?: string
+  bloco_nome?: string
   tipo: string
   limite_moradores: number
   moradores_atuais: number
   vagas_disponiveis: number
-  tem_pendente?: boolean
 }
 
-// Função para validar CPF com dígitos verificadores
 function validarCPF(cpf: string): boolean {
-  cpf = cpf.replace(/[^\d]+/g, '');
+  cpf = cpf.replace(/[^\d]+/g, '')
   
-  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false
   
-  let soma = 0;
-  let resto;
+  let soma = 0
+  let resto
   
   for (let i = 1; i <= 9; i++) {
-    soma = soma + parseInt(cpf.substring(i-1, i)) * (11 - i);
+    soma = soma + parseInt(cpf.substring(i-1, i)) * (11 - i)
   }
   
-  resto = (soma * 10) % 11;
-  if ((resto === 10) || (resto === 11)) resto = 0;
-  if (resto !== parseInt(cpf.substring(9, 10))) return false;
+  resto = (soma * 10) % 11
+  if ((resto === 10) || (resto === 11)) resto = 0
+  if (resto !== parseInt(cpf.substring(9, 10))) return false
   
-  soma = 0;
+  soma = 0
   for (let i = 1; i <= 10; i++) {
-    soma = soma + parseInt(cpf.substring(i-1, i)) * (12 - i);
+    soma = soma + parseInt(cpf.substring(i-1, i)) * (12 - i)
   }
   
-  resto = (soma * 10) % 11;
-  if ((resto === 10) || (resto === 11)) resto = 0;
-  if (resto !== parseInt(cpf.substring(10, 11))) return false;
+  resto = (soma * 10) % 11
+  if ((resto === 10) || (resto === 11)) resto = 0
+  if (resto !== parseInt(cpf.substring(10, 11))) return false
   
-  return true;
+  return true
 }
 
-// Função para formatar CPF
 function formatarCPF(cpf: string): string {
-  cpf = cpf.replace(/\D/g, '');
-  cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
-  cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
-  cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  return cpf;
+  cpf = cpf.replace(/\D/g, '')
+  cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2')
+  cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2')
+  cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  return cpf
 }
 
 export default function CadastroPage() {
@@ -83,12 +81,10 @@ export default function CadastroPage() {
   const [cpfValido, setCpfValido] = useState(true)
   const router = useRouter()
 
-  // Carregar condomínios disponíveis
   useEffect(() => {
     carregarCondominios()
   }, [])
 
-  // Carregar unidades quando condomínio for selecionado
   useEffect(() => {
     if (formData.condominio_id) {
       carregarUnidades(formData.condominio_id)
@@ -98,7 +94,6 @@ export default function CadastroPage() {
     }
   }, [formData.condominio_id])
 
-  // Validar CPF quando mudar
   useEffect(() => {
     if (formData.cpf && formData.cpf.replace(/\D/g, '').length === 11) {
       setCpfValido(validarCPF(formData.cpf))
@@ -113,6 +108,7 @@ export default function CadastroPage() {
     const { data, error } = await supabase
       .from('condominios')
       .select('id, nome, endereco, cidade, estado')
+      .eq('ativo', true)
       .order('nome')
 
     if (error) {
@@ -126,28 +122,37 @@ export default function CadastroPage() {
   async function carregarUnidades(condominioId: string) {
     const supabase = createSupabaseClient()
     
-    const { data, error } = await supabase
+    // Buscar unidades COM blocos (novas)
+    const { data: unidadesComBlocos } = await supabase
       .from('unidades')
-      .select(`*`)
+      .select(`
+        *,
+        blocos:bloco_id(nome)
+      `)
       .eq('condominio_id', condominioId)
-      .order('bloco')
-      .order('numero')
+      .not('bloco_id', 'is', null)
 
-    if (error) {
-      console.error('Erro ao carregar unidades:', error)
-      return
-    }
+    // Buscar unidades SEM blocos (antigas)
+    const { data: unidadesSemBlocos } = await supabase
+      .from('unidades')
+      .select('*')
+      .eq('condominio_id', condominioId)
+      .is('bloco_id', null)
+
+    // Combinar resultados
+    const todasUnidades = [
+      ...(unidadesComBlocos || []).map(u => ({
+        ...u,
+        bloco_nome: u.blocos?.nome || ''
+      })),
+      ...(unidadesSemBlocos || [])
+    ]
 
     // Calcular vagas disponíveis
-    const unidadesComVagas = (data || []).map(unidade => {
-      const vagasDisponiveis = unidade.limite_moradores - unidade.moradores_atuais
-      
-      return {
-        ...unidade,
-        vagas_disponiveis: vagasDisponiveis,
-        tem_pendente: false // Simplificado para correção
-      }
-    })
+    const unidadesComVagas = todasUnidades.map(unidade => ({
+      ...unidade,
+      vagas_disponiveis: (unidade.limite_moradores || 1) - (unidade.moradores_atuais || 0)
+    }))
 
     setUnidades(unidadesComVagas)
     setUnidadesFiltradas(unidadesComVagas)
@@ -156,17 +161,12 @@ export default function CadastroPage() {
   const verificarUnidadeOcupada = async (unidadeId: string): Promise<boolean> => {
     const supabase = createSupabaseClient()
     
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('usuarios_condominios')
-      .select('id, status')
+      .select('id')
       .eq('unidade_id', unidadeId)
       .in('status', ['aprovado', 'pendente'])
       .single()
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao verificar unidade:', error)
-      return true
-    }
 
     return !!data
   }
@@ -174,18 +174,13 @@ export default function CadastroPage() {
   const verificarSindicoExistente = async (condominioId: string): Promise<boolean> => {
     const supabase = createSupabaseClient()
     
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('usuarios_condominios')
-      .select('id, status')
+      .select('id')
       .eq('condominio_id', condominioId)
       .eq('papel', 'sindico')
       .in('status', ['aprovado', 'pendente'])
       .single()
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao verificar síndico:', error)
-      return true
-    }
 
     return !!data
   }
@@ -194,24 +189,14 @@ export default function CadastroPage() {
     const { name, value } = e.target
     
     if (name === 'cpf') {
-      const cpfFormatado = formatarCPF(value)
-      setFormData(prev => ({
-        ...prev,
-        [name]: cpfFormatado
-      }))
+      setFormData(prev => ({ ...prev, [name]: formatarCPF(value) }))
       return
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
 
     if (name === 'condominio_id') {
-      setFormData(prev => ({
-        ...prev,
-        unidade_id: ''
-      }))
+      setFormData(prev => ({ ...prev, unidade_id: '' }))
     }
   }
 
@@ -221,7 +206,6 @@ export default function CadastroPage() {
     setError('')
     setMessage('')
 
-    // Validações básicas
     if (formData.password !== formData.confirmPassword) {
       setError('As senhas não coincidem')
       setLoading(false)
@@ -236,13 +220,13 @@ export default function CadastroPage() {
 
     const cpfNumerico = formData.cpf.replace(/\D/g, '')
     if (cpfNumerico.length !== 11 || !validarCPF(cpfNumerico)) {
-      setError('CPF inválido. Verifique os dígitos.')
+      setError('CPF inválido')
       setLoading(false)
       return
     }
 
     if (formData.role === 'morador' && !formData.unidade_id) {
-      setError('Selecione uma unidade para vincular o morador')
+      setError('Selecione uma unidade')
       setLoading(false)
       return
     }
@@ -250,20 +234,20 @@ export default function CadastroPage() {
     try {
       const supabase = createSupabaseClient()
 
-      // VERIFICAÇÃO 1: CPF já cadastrado
+      // Verificar CPF existente
       const { data: cpfExistente } = await supabase
         .from('usuarios')
-        .select('id, email')
+        .select('id')
         .eq('cpf', formData.cpf)
         .single()
 
       if (cpfExistente) {
-        setError('CPF já cadastrado no sistema')
+        setError('CPF já cadastrado')
         setLoading(false)
         return
       }
 
-      // VERIFICAÇÃO 2: Email já cadastrado
+      // Verificar email existente
       const { data: emailExistente } = await supabase
         .from('usuarios')
         .select('id')
@@ -271,67 +255,61 @@ export default function CadastroPage() {
         .single()
 
       if (emailExistente) {
-        setError('Email já cadastrado no sistema')
+        setError('Email já cadastrado')
         setLoading(false)
         return
       }
 
-      // VERIFICAÇÃO 3: Unidade já ocupada (apenas para moradores)
+      // Verificar unidade ocupada (morador)
       if (formData.role === 'morador' && formData.unidade_id) {
         const unidadeSelecionada = unidades.find(u => u.id === formData.unidade_id)
         
-        if (!unidadeSelecionada) {
-          setError('Unidade não encontrada')
+        if (!unidadeSelecionada || unidadeSelecionada.vagas_disponiveis <= 0) {
+          setError('Unidade sem vagas disponíveis')
           setLoading(false)
           return
         }
 
-        if (unidadeSelecionada.vagas_disponiveis <= 0) {
-          setError('Unidade já possui representante cadastrado')
-          setLoading(false)
-          return
-        }
-
-        const unidadeOcupada = await verificarUnidadeOcupada(formData.unidade_id)
-        if (unidadeOcupada) {
-          setError('Unidade já possui representante cadastrado ou aguardando aprovação')
+        const ocupada = await verificarUnidadeOcupada(formData.unidade_id)
+        if (ocupada) {
+          setError('Unidade já possui representante')
           setLoading(false)
           return
         }
       }
 
-      // VERIFICAÇÃO 4: Apenas um síndico por condomínio
+      // Verificar síndico existente
       if (formData.role === 'sindico') {
-        const sindicoExistente = await verificarSindicoExistente(formData.condominio_id)
-        if (sindicoExistente) {
-          setError('Condomínio já possui síndico cadastrado ou aguardando aprovação')
+        const existe = await verificarSindicoExistente(formData.condominio_id)
+        if (existe) {
+          setError('Condomínio já possui síndico')
           setLoading(false)
           return
         }
       }
 
-      // 1. Criar usuário no Auth
+      // Criar usuário no Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          data: {
-            nome_completo: formData.nome_completo
-          }
+          data: { nome_completo: formData.nome_completo }
         }
       })
 
       if (authError) {
         setError('Erro ao criar conta: ' + authError.message)
+        setLoading(false)
         return
       }
 
       if (!authData.user) {
-        setError('Erro ao criar usuário no sistema de autenticação')
+        setError('Erro ao criar usuário')
+        setLoading(false)
         return
       }
 
-      // 2. Criar registro na tabela usuarios
+      // Criar registro na tabela usuarios
       const { error: userError } = await supabase
         .from('usuarios')
         .insert({
@@ -345,24 +323,12 @@ export default function CadastroPage() {
         })
 
       if (userError) {
-        console.error('Erro detalhado ao criar usuário:', userError)
-        
-        // Verificar se é erro de duplicidade
-        if (userError.code === '23505') {
-          if (userError.message.includes('cpf')) {
-            setError('CPF já cadastrado no sistema')
-          } else if (userError.message.includes('email')) {
-            setError('Email já cadastrado no sistema')
-          } else {
-            setError('Usuário já cadastrado no sistema')
-          }
-        } else {
-          setError('Erro ao salvar dados do usuário: ' + userError.message)
-        }
+        setError('Erro ao salvar dados: ' + userError.message)
+        setLoading(false)
         return
       }
 
-      // 3. Buscar ID do usuário criado
+      // Buscar ID do usuário
       const { data: userData, error: userFetchError } = await supabase
         .from('usuarios')
         .select('id')
@@ -370,11 +336,12 @@ export default function CadastroPage() {
         .single()
 
       if (userFetchError || !userData) {
-        setError('Erro ao buscar usuário criado')
+        setError('Erro ao buscar usuário')
+        setLoading(false)
         return
       }
 
-      // 4. Criar vínculo com condomínio
+      // Criar vínculo
       const vinculoData: any = {
         usuario_id: userData.id,
         condominio_id: formData.condominio_id,
@@ -382,53 +349,28 @@ export default function CadastroPage() {
         status: 'pendente'
       }
 
-      // 5. Vincular à unidade se for morador
       if (formData.role === 'morador' && formData.unidade_id) {
-        // Verificação final da unidade (evitar race condition)
-        const unidadeOcupada = await verificarUnidadeOcupada(formData.unidade_id)
-        if (unidadeOcupada) {
-          setError('Unidade já possui representante cadastrado')
-          setLoading(false)
-          return
-        }
-
         vinculoData.unidade_id = formData.unidade_id
 
         // Atualizar contador da unidade
-        const { error: updateError } = await supabase
+        await supabase
           .from('unidades')
-          .update({ 
-            moradores_atuais: 1
-          })
+          .update({ moradores_atuais: 1 })
           .eq('id', formData.unidade_id)
-
-        if (updateError) {
-          console.error('Erro ao atualizar unidade:', updateError)
-        }
       }
 
-      // 6. Criar vínculo
       const { error: vinculoError } = await supabase
         .from('usuarios_condominios')
         .insert(vinculoData)
 
       if (vinculoError) {
-        console.error('Erro ao criar vínculo:', vinculoError)
-        
-        // Se for erro de duplicidade de unidade
-        if (vinculoError.code === '23505' && vinculoError.message.includes('unidade_id')) {
-          setError('Unidade já possui representante cadastrado')
-        } else if (vinculoError.code === '23505' && vinculoError.message.includes('sindico')) {
-          setError('Condomínio já possui síndico cadastrado')
-        } else {
-          setError('Erro ao vincular ao condomínio: ' + vinculoError.message)
-        }
+        setError('Erro ao vincular: ' + vinculoError.message)
+        setLoading(false)
         return
       }
 
-      setMessage('✅ Cadastro realizado com sucesso! Aguarde aprovação do síndico.')
+      setMessage('✅ Cadastro realizado! Aguarde aprovação do síndico.')
       
-      // Limpar formulário
       setFormData({
         nome_completo: '',
         email: '',
@@ -441,12 +383,9 @@ export default function CadastroPage() {
         unidade_id: ''
       })
 
-      setTimeout(() => {
-        router.push('/login')
-      }, 3000)
+      setTimeout(() => router.push('/login'), 3000)
 
     } catch (error: any) {
-      console.error('Erro completo:', error)
       setError('Erro inesperado: ' + error.message)
     } finally {
       setLoading(false)
@@ -459,9 +398,10 @@ export default function CadastroPage() {
       return
     }
 
-    const filtradas = unidades.filter(unidade =>
-      unidade.numero.toLowerCase().includes(termo.toLowerCase()) ||
-      (unidade.bloco && unidade.bloco.toLowerCase().includes(termo.toLowerCase()))
+    const filtradas = unidades.filter(u =>
+      u.numero.toLowerCase().includes(termo.toLowerCase()) ||
+      (u.bloco && u.bloco.toLowerCase().includes(termo.toLowerCase())) ||
+      (u.bloco_nome && u.bloco_nome.toLowerCase().includes(termo.toLowerCase()))
     )
     setUnidadesFiltradas(filtradas)
   }
@@ -487,12 +427,9 @@ export default function CadastroPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Dados Pessoais */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome Completo *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nome Completo *</label>
               <input
                 type="text"
                 name="nome_completo"
@@ -504,9 +441,7 @@ export default function CadastroPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                CPF *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">CPF *</label>
               <input
                 type="text"
                 name="cpf"
@@ -515,7 +450,7 @@ export default function CadastroPage() {
                 required
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   formData.cpf && !cpfValido ? 'border-red-300' : 'border-gray-300'
                 }`}
               />
@@ -527,9 +462,7 @@ export default function CadastroPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
               <input
                 type="email"
                 name="email"
@@ -541,9 +474,7 @@ export default function CadastroPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
               <input
                 type="tel"
                 name="telefone"
@@ -555,12 +486,9 @@ export default function CadastroPage() {
             </div>
           </div>
 
-          {/* Senhas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Senha *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Senha *</label>
               <input
                 type="password"
                 name="password"
@@ -573,9 +501,7 @@ export default function CadastroPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirmar Senha *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirmar Senha *</label>
               <input
                 type="password"
                 name="confirmPassword"
@@ -587,12 +513,9 @@ export default function CadastroPage() {
             </div>
           </div>
 
-          {/* Tipo de Usuário e Condomínio */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Usuário *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Usuário *</label>
               <select
                 name="role"
                 value={formData.role}
@@ -600,16 +523,13 @@ export default function CadastroPage() {
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Selecione o tipo de usuário</option>
-                <option value="morador">🏠 Morador (1 por unidade)</option>
-                <option value="sindico">👔 Síndico (1 por condomínio)</option>
+                <option value="morador">🏠 Morador</option>
+                <option value="sindico">👔 Síndico</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Condomínio *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Condomínio *</label>
               <select
                 name="condominio_id"
                 value={formData.condominio_id}
@@ -617,28 +537,24 @@ export default function CadastroPage() {
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Selecione um condomínio</option>
-                {condominios.map(condominio => (
-                  <option key={condominio.id} value={condominio.id}>
-                    {condominio.nome} - {condominio.cidade}/{condominio.estado}
+                <option value="">Selecione</option>
+                {condominios.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome} - {c.cidade}/{c.estado}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Seleção de Unidade (apenas para moradores) */}
           {formData.role === 'morador' && formData.condominio_id && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Unidade/Apartamento *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Unidade/Apartamento *</label>
               
-              {/* Busca rápida */}
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder="Buscar unidade por número ou bloco..."
+                  placeholder="Buscar unidade..."
                   onChange={(e) => filtrarUnidades(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -652,26 +568,22 @@ export default function CadastroPage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Selecione uma unidade</option>
-                {unidadesFiltradas.map(unidade => (
+                {unidadesFiltradas.map(u => (
                   <option 
-                    key={unidade.id} 
-                    value={unidade.id}
-                    disabled={unidade.vagas_disponiveis <= 0}
+                    key={u.id} 
+                    value={u.id}
+                    disabled={u.vagas_disponiveis <= 0}
                   >
-                    {unidade.bloco ? `Bloco ${unidade.bloco} - ` : ''}
-                    {unidade.numero} 
-                    {unidade.vagas_disponiveis <= 0 ? 
-                      ' (Representante já cadastrado)' 
-                      : ' (Vaga disponível)'
-                    }
+                    {u.bloco_nome && `${u.bloco_nome} - `}
+                    {u.bloco && !u.bloco_nome && `Bloco ${u.bloco} - `}
+                    Apt {u.numero}
+                    {u.vagas_disponiveis <= 0 ? ' (Ocupado)' : ' (Disponível)'}
                   </option>
                 ))}
               </select>
               
               {unidadesFiltradas.length === 0 && formData.condominio_id && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Nenhuma unidade disponível neste condomínio.
-                </p>
+                <p className="text-sm text-gray-500 mt-2">Nenhuma unidade disponível</p>
               )}
             </div>
           )}
@@ -691,14 +603,12 @@ export default function CadastroPage() {
           </Link>
         </div>
 
-        {/* Informações do sistema */}
         <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <p className="text-xs text-gray-600 font-semibold mb-2">ℹ️ Como funciona:</p>
-          <p className="text-xs text-gray-500">• <strong>1 representante por unidade</strong> - cada apartamento permite apenas 1 morador</p>
-          <p className="text-xs text-gray-500">• <strong>1 síndico por condomínio</strong> - apenas 1 síndico por condomínio</p>
-          <p className="text-xs text-gray-500">• <strong>Validação de CPF</strong> - dígitos verificadores são validados</p>
-          <p className="text-xs text-gray-500">• <strong>Sem duplicidades</strong> - CPF e email são únicos no sistema</p>
-          <p className="text-xs text-gray-500">• Síndico aprova cadastros pendentes</p>
+          <p className="text-xs text-gray-500">• 1 representante por unidade</p>
+          <p className="text-xs text-gray-500">• 1 síndico por condomínio</p>
+          <p className="text-xs text-gray-500">• CPF único no sistema</p>
+          <p className="text-xs text-gray-500">• Aguarde aprovação do síndico</p>
         </div>
       </div>
     </div>

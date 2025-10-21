@@ -25,6 +25,7 @@ export default function VotacoesPage() {
   const [filtro, setFiltro] = useState<string>('todas')
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
+  const [isSindico, setIsSindico] = useState(false) // ✅ ADICIONADO: estado para verificar se é síndico
 
   useEffect(() => {
     carregarDados()
@@ -39,6 +40,18 @@ export default function VotacoesPage() {
       }
 
       setUsuario(user)
+
+      // ✅ CORREÇÃO: Buscar a role do usuário para verificar se é síndico
+      const supabase = createSupabaseClient()
+      const { data: userData } = await supabase
+        .from('usuarios')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      // ✅ CORREÇÃO: Verificar se é síndico ou admin
+      const ehSindico = userData?.role === 'sindico' || userData?.role === 'admin'
+      setIsSindico(ehSindico)
 
       const vinculo = await getCondominioAtivo(user.id)
       if (!vinculo) {
@@ -108,8 +121,6 @@ export default function VotacoesPage() {
     )
   }
 
-  const isSindico = usuario?.tipo_usuario === 'super_admin' || false
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -127,7 +138,7 @@ export default function VotacoesPage() {
                 Gerencie e participe das votações do condomínio
               </p>
             </div>
-            {isSindico && (
+            {isSindico && ( // ✅ CORREÇÃO: Agora usando o estado isSindico corretamente
               <Link
                 href="/votacoes/nova"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -174,7 +185,7 @@ export default function VotacoesPage() {
             >
               🔴 Encerradas ({contadores.encerrada})
             </button>
-            {isSindico && (
+            {isSindico && ( // ✅ CORREÇÃO: Também usando isSindico para mostrar a tab de rascunhos
               <button
                 onClick={() => setFiltro('rascunho')}
                 className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
@@ -216,7 +227,7 @@ export default function VotacoesPage() {
                 : `Não há votações ${filtro === 'ativa' ? 'ativas' : filtro === 'encerrada' ? 'encerradas' : 'em rascunho'}`
               }
             </p>
-            {isSindico && !busca && (
+            {isSindico && !busca && ( // ✅ CORREÇÃO: Usando isSindico para mostrar o botão de criar primeira votação
               <Link
                 href="/votacoes/nova"
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"

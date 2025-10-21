@@ -33,11 +33,16 @@ export default function DashboardPage() {
     checkAuth()
   }, [])
 
+  useEffect(() => {
+    if (isAdmin && usuario) {
+      router.push('/admin/dashboard')
+    }
+  }, [isAdmin, usuario, router])
+
   const checkAuth = async () => {
     try {
       const supabase = createSupabaseClient()
       
-      // Verificar sessão de autenticação
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       
       if (authError || !user) {
@@ -45,7 +50,6 @@ export default function DashboardPage() {
         return
       }
 
-      // Buscar dados completos do usuário
       const { data: userData, error: userError } = await supabase
         .from('usuarios')
         .select('*')
@@ -60,20 +64,15 @@ export default function DashboardPage() {
 
       setUsuario(userData)
 
-      // Verificar se é admin
       if (userData.role === 'admin') {
         setIsAdmin(true)
         setLoading(false)
-        return // Admin não precisa de condomínio
+        return
       }
 
-      // Para não-admins, buscar condomínio ativo
       const { data: vinculo, error: vinculoError } = await supabase
         .from('usuarios_condominios')
-        .select(`
-          *,
-          condominio:condominios(*)
-        `)
+        .select(`*, condominio:condominios(*)`)
         .eq('usuario_id', userData.id)
         .eq('status', 'aprovado')
         .single()
@@ -84,7 +83,6 @@ export default function DashboardPage() {
         return
       }
 
-      // Verificar se condomínio está ativo
       if (!vinculo.condominio?.ativo) {
         router.push('/condominio-desativado')
         return
@@ -136,13 +134,10 @@ export default function DashboardPage() {
     )
   }
 
-  // Se for admin, redireciona para dashboard do admin
   if (isAdmin && usuario) {
-    router.push('/admin/dashboard')
     return null
   }
 
-  // Se não tem usuário ou condomínio
   if (!usuario || !condominio) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -167,7 +162,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -192,10 +186,8 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Menu Lateral + Conteúdo */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex gap-6">
-          {/* Sidebar - Menu de Navegação */}
           <aside className="w-64 flex-shrink-0">
             <nav className="bg-white rounded-lg shadow-sm p-4 space-y-2 sticky top-8">
               <button
@@ -212,9 +204,6 @@ export default function DashboardPage() {
               >
                 <span>🗳️</span>
                 <span>Votações</span>
-                <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  3
-                </span>
               </button>
               
               <button
@@ -223,9 +212,6 @@ export default function DashboardPage() {
               >
                 <span>📢</span>
                 <span>Avisos</span>
-                <span className="ml-auto bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  5
-                </span>
               </button>
               
               <button
@@ -234,9 +220,6 @@ export default function DashboardPage() {
               >
                 <span>💬</span>
                 <span>Falar com Síndico</span>
-                <span className="ml-auto bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  2
-                </span>
               </button>
 
               {usuario.role === 'sindico' && (
@@ -254,63 +237,14 @@ export default function DashboardPage() {
             </nav>
           </aside>
 
-          {/* Conteúdo Principal */}
           <main className="flex-1 space-y-6">
-            {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm">Votações Ativas</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-1">3</p>
-                  </div>
-                  <div className="text-4xl">🗳️</div>
-                </div>
-                <p className="text-xs text-orange-600 mt-2">
-                  ⚠️ Você tem votações pendentes
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm">Avisos Novos</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-1">5</p>
-                  </div>
-                  <div className="text-4xl">📢</div>
-                </div>
-                <p className="text-xs text-blue-600 mt-2">
-                  ℹ️ 2 avisos fixados
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm">Mensagens</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-1">2</p>
-                  </div>
-                  <div className="text-4xl">💬</div>
-                </div>
-                <p className="text-xs text-green-600 mt-2">
-                  ✓ Não lidas
-                </p>
-              </div>
-            </div>
-
-            {/* Componente de Votações */}
             <VotacoesDashboard userId={usuario.id} />
 
-            {/* Grid de Avisos e Comunicações */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Componente de Avisos */}
               <AvisosDashboard userId={usuario.id} />
-
-              {/* Componente de Comunicações */}
               <ComunicacoesDashboard userId={usuario.id} />
             </div>
 
-            {/* Acesso Rápido */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">
                 ⚡ Acesso Rápido

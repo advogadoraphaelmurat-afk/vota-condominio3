@@ -37,12 +37,19 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
   const carregarVotacoes = async () => {
     try {
       const supabase = createSupabaseClient()
+      
+      console.log('🔍 User ID:', userId)
+      
       const vinculo = await getCondominioAtivo(userId)
-
+      console.log('🔍 Vínculo retornado:', vinculo)
+      
       if (!vinculo) {
+        console.log('❌ Nenhum vínculo encontrado')
         setLoading(false)
         return
       }
+
+      console.log('🔍 Buscando votações do condomínio:', vinculo.id)
 
       const { data, error } = await supabase
         .from('votacoes')
@@ -55,28 +62,35 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
           ),
           votos(id, usuario_id)
         `)
-        .eq('condominio_id', condominio.condominio_id)
+        .eq('condominio_id', vinculo.id)
         .eq('status', 'ativa')
         .order('created_at', { ascending: false })
         .limit(3)
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Erro SQL:', error)
+        setLoading(false)
+        return
+      }
 
+      console.log('✅ Votações carregadas:', data?.length || 0)
+      console.log('📊 Dados completos:', data)
       setVotacoes(data || [])
     } catch (error) {
-      console.error('Erro ao carregar votações:', error)
+      console.error('💥 Erro inesperado:', error)
     } finally {
       setLoading(false)
     }
   }
 
   const jaVotou = (votacao: Votacao) => {
-    return votacao.votos.some(v => v.usuario_id === userId)
+    return votacao.votos?.some(v => v.usuario_id === userId) || false
   }
 
   const calcularProgresso = (votacao: Votacao) => {
+    if (!votacao.opcoes_votacao) return 0
     const totalVotos = votacao.opcoes_votacao.reduce(
-      (acc, opcao) => acc + opcao.votos.length,
+      (acc, opcao) => acc + (opcao.votos?.length || 0),
       0
     )
     return totalVotos
@@ -109,7 +123,7 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
     return (
       <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
         ⏳ Aguardando seu voto
-        </span>
+      </span>
     )
   }
 
@@ -158,7 +172,6 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold text-gray-900">🗳️ Votações Ativas</h2>
@@ -174,7 +187,6 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
         </button>
       </div>
 
-      {/* Lista de Votações */}
       <div className="space-y-4">
         {votacoes.map((votacao) => {
           const votou = jaVotou(votacao)
@@ -188,12 +200,9 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
                 votou ? 'border-green-300 bg-green-50' : 'border-orange-300 bg-orange-50'
               }`}
             >
-              {/* Header */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-start gap-2 flex-1">
-                  <span className="text-2xl">
-                    {getTipoIcon(votacao.tipo)}
-                  </span>
+                  <span className="text-2xl">{getTipoIcon(votacao.tipo)}</span>
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 mb-1">
                       {votacao.titulo}
@@ -207,23 +216,16 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
                 </div>
               </div>
 
-              {/* Status Badge */}
-              <div className="mb-3">
-                {getStatusBadge(votacao)}
-              </div>
+              <div className="mb-3">{getStatusBadge(votacao)}</div>
 
-              {/* Info Row */}
               <div className="flex items-center justify-between text-sm mb-3">
                 <span className="text-gray-600">
                   👥 {totalVotos} {totalVotos === 1 ? 'voto' : 'votos'}
                 </span>
-                <span className="text-gray-600">
-                  ⏰ {tempoRestante}
-                </span>
+                <span className="text-gray-600">⏰ {tempoRestante}</span>
               </div>
 
-              {/* Preview das Opções */}
-              {!votou && votacao.opcoes_votacao.length > 0 && (
+              {!votou && votacao.opcoes_votacao && votacao.opcoes_votacao.length > 0 && (
                 <div className="bg-white rounded-lg p-3 mb-3">
                   <p className="text-xs text-gray-500 mb-2">Opções disponíveis:</p>
                   <div className="space-y-1">
@@ -242,7 +244,6 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
                 </div>
               )}
 
-              {/* Botão de Ação */}
               <button
                 onClick={() => router.push(`/votacoes/${votacao.id}`)}
                 className={`w-full py-2 rounded-lg font-medium transition-colors ${
@@ -258,7 +259,6 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
         })}
       </div>
 
-      {/* Footer */}
       {votacoes.length >= 3 && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <button

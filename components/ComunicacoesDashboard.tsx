@@ -1,4 +1,3 @@
-// components/ComunicacoesDashboard.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -53,7 +52,7 @@ export default function ComunicacoesDashboard({ userId }: ComunicacoesDashboardP
             role
           )
         `)
-        .eq('condominio_id', condominio.condominio_id)
+        .eq('condominio_id', vinculo.id) // ✅ CORREÇÃO: mudar condominio.id para vinculo.id
         .contains('destinatarios', [userId])
         .order('created_at', { ascending: false })
         .limit(4)

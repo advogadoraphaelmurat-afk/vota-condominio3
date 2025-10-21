@@ -66,66 +66,59 @@ export default function MoradoresPage() {
         return
       }
 
-      // CORREÇÃO: getCondominioAtivo retorna o condomínio completo, não apenas o ID
-      const condominio = await getCondominioAtivo(user.id)
-      if (!condominio) {
-        alert('Nenhum condomínio encontrado')
-        return
-      }
+const condominio = await getCondominioAtivo(user.id)
+console.log('🔍 Condomínio retornado:', condominio) // ✅ DEBUG
+if (!condominio) {
+  alert('Nenhum condomínio encontrado')
+  return
+}
 
-      setCondominioId(condominio.id)
-      await carregarMoradores(condominio.id)
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error)
-    } finally {
-      setLoading(false)
-    }
+setCondominioId(condominio.id)
+console.log('🔍 Carregando moradores do condomínio:', condominio.id) // ✅ DEBUG
+await carregarMoradores(condominio.id)
+
+async function carregarMoradores(condId: string) {
+  const supabase = createSupabaseClient()
+
+  const { data, error } = await supabase
+    .from('usuarios_condominios')
+    .select(`
+      *,
+      usuarios!inner(
+        id,
+        nome_completo,
+        email,
+        telefone,
+        cpf,
+        role,
+        ativo,
+        created_at
+      ),
+      unidades(
+        numero,
+        bloco
+      )
+    `)
+    .eq('condominio_id', condId) // ✅ USE condId direto
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Erro:', error)
+    return
   }
 
-  async function carregarMoradores(condId: string) {
-    const supabase = createSupabaseClient()
-
-    const { data, error } = await supabase
-      .from('usuarios_condominios')
-      .select(`
-        *,
-        usuarios!inner(
-          id,
-          nome_completo,
-          email,
-          telefone,
-          cpf,
-          role,
-          ativo,
-          created_at
-        ),
-        unidades(
-          numero,
-          bloco
-        )
-      `)
-      .eq('condominio_id', condId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Erro ao carregar moradores:', error)
-      return
+  const moradoresData = data?.map(vinculo => ({
+    ...vinculo.usuarios,
+    vinculo: {
+      status: vinculo.status,
+      papel: vinculo.papel,
+      data_aprovacao: vinculo.data_aprovacao,
+      unidade: vinculo.unidades
     }
+  })) || []
 
-    const moradoresData = data?.map(vinculo => ({
-      ...vinculo.usuarios,
-      vinculo: {
-        status: vinculo.status,
-        papel: vinculo.papel,
-        data_aprovacao: vinculo.data_aprovacao,
-        aprovado_por: vinculo.aprovado_por,
-        unidade: vinculo.unidades
-      }
-    })) || []
-
-    setMoradores(moradoresData)
-  }
-
+  setMoradores(moradoresData)
+}
   async function aprovarMorador(moradorId: string) {
     // ⚠️ CORREÇÃO: Verificar se é síndico tentando aprovar outro síndico
     const supabase = createSupabaseClient()

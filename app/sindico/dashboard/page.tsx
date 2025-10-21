@@ -185,6 +185,11 @@ export default function SindicoDashboard() {
             )}
           </Link>
 
+<Link href="/avisos/novo" className="bg-white rounded-lg shadow p-6 hover:shadow-md block">
+  <h3 className="font-semibold mb-4">📢 Criar Aviso</h3>
+  <p className="text-gray-600">Publique avisos para os moradores</p>
+</Link>
+
           <Link href="/votacoes" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow block">
             <h3 className="font-semibold mb-4">🗳️ Gerenciar Votações</h3>
             <p className="text-gray-600">Crie e acompanhe votações do condomínio</p>

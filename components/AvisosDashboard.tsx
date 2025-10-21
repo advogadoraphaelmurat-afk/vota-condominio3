@@ -43,7 +43,7 @@ export default function AvisosDashboard({ userId }: AvisosDashboardProps) {
       const { data, error } = await supabase
         .from('avisos')
         .select('*')
-        .eq('condominio_id', condominio.condominio_id)
+        .eq('condominio_id', vinculo.id) // ✅ CORREÇÃO: mudar condominio.id para vinculo.id
         .eq('visivel', true)
         .order('fixado', { ascending: false })
         .order('created_at', { ascending: false })
