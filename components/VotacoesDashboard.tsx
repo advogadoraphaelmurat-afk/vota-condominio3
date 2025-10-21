@@ -49,7 +49,8 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
         return
       }
 
-      console.log('🔍 Buscando votações do condomínio:', vinculo.id)
+      // ✅ CORREÇÃO: Usar vinculo.condominio_id ao invés de vinculo.id
+      console.log('🔍 Buscando votações do condomínio:', vinculo.condominio_id)
 
       const { data, error } = await supabase
         .from('votacoes')
@@ -62,7 +63,7 @@ export default function VotacoesDashboard({ userId }: VotacoesDashboardProps) {
           ),
           votos(id, usuario_id)
         `)
-        .eq('condominio_id', vinculo.id)
+        .eq('condominio_id', vinculo.condominio_id) // ✅ CORREÇÃO AQUI
         .eq('status', 'ativa')
         .order('created_at', { ascending: false })
         .limit(3)

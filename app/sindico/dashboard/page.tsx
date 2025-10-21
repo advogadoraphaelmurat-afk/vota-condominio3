@@ -13,7 +13,8 @@ export default function SindicoDashboard() {
     totalMoradores: 0,
     pendentes: 0,
     votacoesAtivas: 0,
-    avisosAtivos: 0
+    avisosAtivos: 0,
+    comunicacoesNaoLidas: 0 // ✅ NOVO
   })
   const [loading, setLoading] = useState(true)
 
@@ -45,7 +46,7 @@ export default function SindicoDashboard() {
       }
 
       setCondominio(condominioAtivo)
-      await carregarEstatisticas(condominioAtivo.id)
+      await carregarEstatisticas(condominioAtivo.condominio_id)
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     } finally {
@@ -83,11 +84,21 @@ export default function SindicoDashboard() {
 
       if (avisosError) console.error('Erro ao buscar avisos:', avisosError)
 
+      // ✅ NOVO: Buscar comunicações não lidas
+      const { data: comunicacoes, error: comunicacoesError } = await supabase
+        .from('comunicacoes')
+        .select('id')
+        .eq('condominio_id', condominioId)
+        .eq('lida', false)
+
+      if (comunicacoesError) console.error('Erro ao buscar comunicações:', comunicacoesError)
+
       setEstatisticas({
         totalMoradores: moradores?.length || 0,
         pendentes: moradores?.filter(m => m.status === 'pendente').length || 0,
         votacoesAtivas: votacoes?.length || 0,
-        avisosAtivos: avisos?.length || 0
+        avisosAtivos: avisos?.length || 0,
+        comunicacoesNaoLidas: comunicacoes?.length || 0 // ✅ NOVO
       })
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error)
@@ -129,7 +140,7 @@ export default function SindicoDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-3 bg-blue-100 rounded-lg"><span className="text-2xl">👥</span></div>
@@ -169,6 +180,17 @@ export default function SindicoDashboard() {
               </div>
             </div>
           </div>
+
+          {/* ✅ NOVO: Card de Comunicações */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-orange-100 rounded-lg"><span className="text-2xl">💬</span></div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Comunicações</p>
+                <p className="text-2xl font-bold text-orange-600">{estatisticas.comunicacoesNaoLidas}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Ações Rápidas */}
@@ -185,10 +207,11 @@ export default function SindicoDashboard() {
             )}
           </Link>
 
-<Link href="/avisos/novo" className="bg-white rounded-lg shadow p-6 hover:shadow-md block">
-  <h3 className="font-semibold mb-4">📢 Criar Aviso</h3>
-  <p className="text-gray-600">Publique avisos para os moradores</p>
-</Link>
+          {/* ✅ CORREÇÃO: Link correto para criar aviso */}
+          <Link href="/avisos/nova" className="bg-white rounded-lg shadow p-6 hover:shadow-md block">
+            <h3 className="font-semibold mb-4">📢 Criar Aviso</h3>
+            <p className="text-gray-600">Publique avisos para os moradores</p>
+          </Link>
 
           <Link href="/votacoes" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow block">
             <h3 className="font-semibold mb-4">🗳️ Gerenciar Votações</h3>
@@ -196,8 +219,21 @@ export default function SindicoDashboard() {
           </Link>
 
           <Link href="/avisos" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow block">
-            <h3 className="font-semibold mb-4">📢 Gerenciar Avisos</h3>
-            <p className="text-gray-600">Crie e gerencie avisos para os moradores</p>
+            <h3 className="font-semibold mb-4">📋 Gerenciar Avisos</h3>
+            <p className="text-gray-600">Visualize e edite avisos publicados</p>
+          </Link>
+
+          {/* ✅ NOVO: Link para Comunicações */}
+          <Link href="/sindico/comunicacoes" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow block">
+            <h3 className="font-semibold mb-4">💬 Comunicações</h3>
+            <p className="text-gray-600">Visualize e responda mensagens dos moradores</p>
+            {estatisticas.comunicacoesNaoLidas > 0 && (
+              <div className="mt-2">
+                <span className="inline-block bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-full">
+                  {estatisticas.comunicacoesNaoLidas} não lidas
+                </span>
+              </div>
+            )}
           </Link>
         </div>
       </main>
