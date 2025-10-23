@@ -78,6 +78,10 @@ export default function SindicoComunicacoesPage() {
   async function carregarComunicacoes(condominioId: string) {
     const supabase = createSupabaseClient()
 
+    console.log('🔍 Síndico buscando comunicações...')
+    console.log('   Condomínio ID:', condominioId)
+    console.log('   Filtro:', filtro)
+
     let query = supabase
       .from('comunicacoes')
       .select(`
@@ -101,9 +105,12 @@ export default function SindicoComunicacoesPage() {
     const { data, error } = await query
 
     if (error) {
-      console.error('Erro ao carregar comunicações:', error)
+      console.error('❌ Erro ao carregar comunicações:', error)
       return
     }
+
+    console.log('✅ Comunicações encontradas:', data?.length || 0)
+    console.log('📊 Dados:', data)
 
     setComunicacoes(data || [])
   }

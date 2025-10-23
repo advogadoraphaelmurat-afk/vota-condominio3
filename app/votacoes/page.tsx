@@ -1,3 +1,5 @@
+// app/votacoes/page.tsx - COM ATUALIZAÇÃO AUTOMÁTICA DE STATUS
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -25,11 +27,81 @@ export default function VotacoesPage() {
   const [filtro, setFiltro] = useState<string>('todas')
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
-  const [isSindico, setIsSindico] = useState(false) // ✅ ADICIONADO: estado para verificar se é síndico
+  const [isSindico, setIsSindico] = useState(false)
 
   useEffect(() => {
     carregarDados()
   }, [])
+
+  // ✅ FUNÇÃO PARA ATUALIZAR STATUS DE TODAS AS VOTAÇÕES
+  async function atualizarStatusVotacoes(condId: string) {
+    const supabase = createSupabaseClient()
+    const agora = new Date()
+
+    console.log('🔄 Atualizando status de todas as votações...')
+    console.log('⏰ Data/hora atual:', agora.toISOString())
+
+    // Buscar TODAS as votações (agendadas e ativas)
+    const { data: todasVotacoes, error } = await supabase
+      .from('votacoes')
+      .select('*')
+      .eq('condominio_id', condId)
+      .in('status', ['agendada', 'ativa'])
+
+    if (error || !todasVotacoes) {
+      console.error('❌ Erro ao buscar votações:', error)
+      return
+    }
+
+    console.log(`📋 Verificando ${todasVotacoes.length} votações...`)
+
+    // Processar cada votação
+    for (const votacao of todasVotacoes) {
+      const dataInicio = new Date(votacao.data_inicio)
+      const dataFim = new Date(votacao.data_fim)
+      let novoStatus = votacao.status
+
+      console.log(`\n🔍 Votação: "${votacao.titulo}"`)
+      console.log(`   Status atual: ${votacao.status}`)
+      console.log(`   Início: ${dataInicio.toLocaleString('pt-BR')}`)
+      console.log(`   Fim: ${dataFim.toLocaleString('pt-BR')}`)
+
+      // Regra 1: Se está AGENDADA e já passou do início e ainda não passou do fim → ATIVAR
+      if (votacao.status === 'agendada' && agora >= dataInicio && agora <= dataFim) {
+        novoStatus = 'ativa'
+        console.log(`   ✅ ATIVANDO: Passou do início e ainda não acabou`)
+      }
+      // Regra 2: Se está AGENDADA e já passou do fim → ENCERRAR
+      else if (votacao.status === 'agendada' && agora > dataFim) {
+        novoStatus = 'encerrada'
+        console.log(`   🔴 ENCERRANDO: Passou do prazo sem ser ativada`)
+      }
+      // Regra 3: Se está ATIVA e já passou do fim → ENCERRAR
+      else if (votacao.status === 'ativa' && agora > dataFim) {
+        novoStatus = 'encerrada'
+        console.log(`   🔴 ENCERRANDO: Votação vencida`)
+      }
+      else {
+        console.log(`   ⏸️ Mantendo status atual`)
+      }
+
+      // Atualizar se mudou
+      if (novoStatus !== votacao.status) {
+        const { error: updateError } = await supabase
+          .from('votacoes')
+          .update({ status: novoStatus })
+          .eq('id', votacao.id)
+
+        if (updateError) {
+          console.error(`   ❌ Erro ao atualizar: ${updateError.message}`)
+        } else {
+          console.log(`   ✅ Atualizado: ${votacao.status} → ${novoStatus}`)
+        }
+      }
+    }
+
+    console.log('\n✅ Atualização de status concluída!')
+  }
 
   async function carregarDados() {
     try {
@@ -41,7 +113,6 @@ export default function VotacoesPage() {
 
       setUsuario(user)
 
-      // ✅ CORREÇÃO: Buscar a role do usuário para verificar se é síndico
       const supabase = createSupabaseClient()
       const { data: userData } = await supabase
         .from('usuarios')
@@ -49,7 +120,6 @@ export default function VotacoesPage() {
         .eq('id', user.id)
         .single()
 
-      // ✅ CORREÇÃO: Verificar se é síndico ou admin
       const ehSindico = userData?.role === 'sindico' || userData?.role === 'admin'
       setIsSindico(ehSindico)
 
@@ -60,6 +130,11 @@ export default function VotacoesPage() {
       }
 
       setCondominioId(vinculo.condominio_id)
+
+      // ✅ PRIMEIRO: Atualizar status de todas as votações
+      await atualizarStatusVotacoes(vinculo.condominio_id)
+
+      // DEPOIS: Carregar votações já com status correto
       await carregarVotacoes(vinculo.condominio_id)
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
@@ -77,7 +152,6 @@ export default function VotacoesPage() {
       .eq('condominio_id', condId)
       .order('created_at', { ascending: false })
 
-    // Aplicar filtro
     if (filtro !== 'todas') {
       query = query.eq('status', filtro)
     }
@@ -89,14 +163,59 @@ export default function VotacoesPage() {
       return
     }
 
+    console.log(`📊 ${data?.length || 0} votações carregadas`)
     setVotacoes(data || [])
   }
 
   useEffect(() => {
     if (condominioId) {
-      carregarVotacoes(condominioId)
+      // Atualizar status e recarregar quando trocar de filtro
+      atualizarStatusVotacoes(condominioId).then(() => {
+        carregarVotacoes(condominioId)
+      })
     }
   }, [filtro, condominioId])
+
+  // Função para ativar manualmente
+  async function ativarVotacao(votacaoId: string, titulo: string) {
+    if (!confirm(`Ativar a votação "${titulo}"?\n\nIsso permitirá que moradores comecem a votar.`)) return
+
+    try {
+      const supabase = createSupabaseClient()
+      const { error } = await supabase
+        .from('votacoes')
+        .update({ status: 'ativa' })
+        .eq('id', votacaoId)
+
+      if (error) throw error
+
+      alert('✅ Votação ativada com sucesso!')
+      await atualizarStatusVotacoes(condominioId)
+      await carregarVotacoes(condominioId)
+    } catch (error: any) {
+      alert('❌ Erro ao ativar votação: ' + error.message)
+    }
+  }
+
+  // Função para encerrar manualmente
+  async function encerrarVotacao(votacaoId: string, titulo: string) {
+    if (!confirm(`Encerrar a votação "${titulo}"?\n\nEsta ação não pode ser desfeita.`)) return
+
+    try {
+      const supabase = createSupabaseClient()
+      const { error } = await supabase
+        .from('votacoes')
+        .update({ status: 'encerrada' })
+        .eq('id', votacaoId)
+
+      if (error) throw error
+
+      alert('✅ Votação encerrada!')
+      await carregarVotacoes(condominioId)
+    } catch (error: any) {
+      alert('❌ Erro ao encerrar votação: ' + error.message)
+    }
+  }
 
   const votacoesFiltradas = votacoes.filter(v =>
     v.titulo.toLowerCase().includes(busca.toLowerCase()) ||
@@ -106,6 +225,7 @@ export default function VotacoesPage() {
   const contadores = {
     todas: votacoes.length,
     ativa: votacoes.filter(v => v.status === 'ativa').length,
+    agendada: votacoes.filter(v => v.status === 'agendada').length,
     encerrada: votacoes.filter(v => v.status === 'encerrada').length,
     rascunho: votacoes.filter(v => v.status === 'rascunho').length,
   }
@@ -116,6 +236,7 @@ export default function VotacoesPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando votações...</p>
+          <p className="text-xs text-gray-400 mt-2">Verificando status...</p>
         </div>
       </div>
     )
@@ -123,7 +244,6 @@ export default function VotacoesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
@@ -138,7 +258,7 @@ export default function VotacoesPage() {
                 Gerencie e participe das votações do condomínio
               </p>
             </div>
-            {isSindico && ( // ✅ CORREÇÃO: Agora usando o estado isSindico corretamente
+            {isSindico && (
               <Link
                 href="/votacoes/nova"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -151,9 +271,7 @@ export default function VotacoesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filtros e Busca */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
-          {/* Tabs de Filtro */}
           <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
             <button
               onClick={() => setFiltro('todas')}
@@ -176,6 +294,16 @@ export default function VotacoesPage() {
               🟢 Ativas ({contadores.ativa})
             </button>
             <button
+              onClick={() => setFiltro('agendada')}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
+                filtro === 'agendada'
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📅 Agendadas ({contadores.agendada})
+            </button>
+            <button
               onClick={() => setFiltro('encerrada')}
               className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
                 filtro === 'encerrada'
@@ -185,7 +313,7 @@ export default function VotacoesPage() {
             >
               🔴 Encerradas ({contadores.encerrada})
             </button>
-            {isSindico && ( // ✅ CORREÇÃO: Também usando isSindico para mostrar a tab de rascunhos
+            {isSindico && (
               <button
                 onClick={() => setFiltro('rascunho')}
                 className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
@@ -199,7 +327,6 @@ export default function VotacoesPage() {
             )}
           </div>
 
-          {/* Campo de Busca */}
           <div className="relative">
             <input
               type="text"
@@ -212,7 +339,6 @@ export default function VotacoesPage() {
           </div>
         </div>
 
-        {/* Lista de Votações */}
         {votacoesFiltradas.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <div className="text-6xl mb-4">🗳️</div>
@@ -224,10 +350,10 @@ export default function VotacoesPage() {
                 ? 'Tente buscar com outros termos'
                 : filtro === 'todas'
                 ? 'Ainda não há votações criadas'
-                : `Não há votações ${filtro === 'ativa' ? 'ativas' : filtro === 'encerrada' ? 'encerradas' : 'em rascunho'}`
+                : `Não há votações ${filtro === 'ativa' ? 'ativas' : filtro === 'encerrada' ? 'encerradas' : filtro === 'agendada' ? 'agendadas' : 'em rascunho'}`
               }
             </p>
-            {isSindico && !busca && ( // ✅ CORREÇÃO: Usando isSindico para mostrar o botão de criar primeira votação
+            {isSindico && !busca && (
               <Link
                 href="/votacoes/nova"
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -243,11 +369,15 @@ export default function VotacoesPage() {
                 (new Date(votacao.data_fim).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
               )
 
+              const dentroDosPrazos = (
+                new Date(votacao.data_inicio) <= new Date() &&
+                new Date(votacao.data_fim) >= new Date()
+              )
+
               return (
-                <Link
+                <div
                   key={votacao.id}
-                  href={`/votacoes/${votacao.id}`}
-                  className="block bg-white rounded-lg shadow hover:shadow-lg transition p-6"
+                  className="bg-white rounded-lg shadow hover:shadow-lg transition p-6"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -260,7 +390,7 @@ export default function VotacoesPage() {
                             ? 'bg-green-100 text-green-700'
                             : votacao.status === 'encerrada'
                             ? 'bg-gray-100 text-gray-700'
-                            : votacao.status === 'rascunho'
+                            : votacao.status === 'agendada'
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-blue-100 text-blue-700'
                         }`}>
@@ -270,6 +400,12 @@ export default function VotacoesPage() {
                           {votacao.status === 'agendada' && '📅 Agendada'}
                           {votacao.status === 'cancelada' && '❌ Cancelada'}
                         </span>
+
+                        {votacao.status === 'agendada' && dentroDosPrazos && isSindico && (
+                          <span className="text-xs px-3 py-1 rounded-full bg-orange-100 text-orange-700 animate-pulse">
+                            ⚡ Pode ativar agora
+                          </span>
+                        )}
                       </div>
                       <p className="text-gray-600 mb-4 line-clamp-2">
                         {votacao.descricao}
@@ -306,7 +442,34 @@ export default function VotacoesPage() {
                       </div>
                     )}
                   </div>
-                </Link>
+
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex gap-3">
+                    <Link
+                      href={`/votacoes/${votacao.id}`}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-center font-medium"
+                    >
+                      {votacao.status === 'ativa' ? '🗳️ Votar' : '👁️ Ver Detalhes'}
+                    </Link>
+
+                    {isSindico && votacao.status === 'agendada' && (
+                      <button
+                        onClick={() => ativarVotacao(votacao.id, votacao.titulo)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                      >
+                        ▶️ Ativar
+                      </button>
+                    )}
+
+                    {isSindico && votacao.status === 'ativa' && (
+                      <button
+                        onClick={() => encerrarVotacao(votacao.id, votacao.titulo)}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                      >
+                        ⏹️ Encerrar
+                      </button>
+                    )}
+                  </div>
+                </div>
               )
             })}
           </div>
